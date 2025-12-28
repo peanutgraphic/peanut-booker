@@ -1,0 +1,136 @@
+@import "tailwindcss";
+
+/* Custom theme variables */
+@theme {
+  --color-primary-50: #fdf4e7;
+  --color-primary-100: #fce8cf;
+  --color-primary-200: #f9d19f;
+  --color-primary-300: #f5b06f;
+  --color-primary-400: #f28f3f;
+  --color-primary-500: #ee6e0f;
+  --color-primary-600: #c4580a;
+  --color-primary-700: #9a4408;
+  --color-primary-800: #703106;
+  --color-primary-900: #461e04;
+
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+}
+
+/* WordPress admin overrides */
+#peanut-booker-app {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #1e293b;
+  -webkit-font-smoothing: antialiased;
+}
+
+#peanut-booker-app * {
+  box-sizing: border-box;
+}
+
+/* Reset WordPress admin styles within our app */
+#peanut-booker-app a {
+  text-decoration: none;
+}
+
+#peanut-booker-app button {
+  cursor: pointer;
+}
+
+#peanut-booker-app input,
+#peanut-booker-app textarea,
+#peanut-booker-app select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* Ensure no native select arrows appear */
+#peanut-booker-app select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: none;
+}
+
+/* Custom scrollbar */
+#peanut-booker-app ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+#peanut-booker-app ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+#peanut-booker-app ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+#peanut-booker-app ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Toast animations */
+@keyframes slide-in {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.2s ease-out forwards;
+}
+
+@keyframes slide-up {
+  from {
+    transform: translateX(-50%) translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.2s ease-out forwards;
+}
+
+@keyframes scale-in {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.15s ease-out forwards;
+}
+
+/* Tooltip animation - uses opacity only to avoid interfering with position transforms */
+@keyframes tooltip-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-tooltip-in {
+  animation: tooltip-in 0.15s ease-out forwards;
+}

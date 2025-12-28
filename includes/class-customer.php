@@ -74,7 +74,7 @@ class Peanut_Booker_Customer {
             'email'              => $user->user_email,
             'first_name'         => get_user_meta( $user_id, 'first_name', true ),
             'last_name'          => get_user_meta( $user_id, 'last_name', true ),
-            'phone'              => get_user_meta( $user_id, 'pb_phone', true ),
+            'phone'              => Peanut_Booker_Encryption::decrypt( get_user_meta( $user_id, 'pb_phone', true ) ),
             'company'            => get_user_meta( $user_id, 'pb_company', true ),
             'address'            => get_user_meta( $user_id, 'pb_address', true ),
             'city'               => get_user_meta( $user_id, 'pb_city', true ),
@@ -318,7 +318,14 @@ class Peanut_Booker_Customer {
 
         foreach ( $meta_fields as $field ) {
             if ( isset( $_POST[ $field ] ) ) {
-                update_user_meta( $user_id, 'pb_' . $field, sanitize_text_field( $_POST[ $field ] ) );
+                $value = sanitize_text_field( $_POST[ $field ] );
+
+                // Encrypt sensitive fields.
+                if ( 'phone' === $field ) {
+                    $value = Peanut_Booker_Encryption::encrypt( $value );
+                }
+
+                update_user_meta( $user_id, 'pb_' . $field, $value );
             }
         }
 

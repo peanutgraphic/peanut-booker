@@ -58,6 +58,81 @@ class Peanut_Booker_Booking {
     }
 
     /**
+     * Calculate expected booking total based on performer rate and event duration.
+     *
+     * @param int    $performer_id    Performer ID.
+     * @param string $event_start_time Event start time (HH:MM:SS or HH:MM).
+     * @param string $event_end_time   Event end time (HH:MM:SS or HH:MM).
+     * @return float|WP_Error Calculated amount or error.
+     */
+    public static function calculate_booking_total( $performer_id, $event_start_time = '', $event_end_time = '' ) {
+        $performer = Peanut_Booker_Performer::get( $performer_id );
+        if ( ! $performer ) {
+            return new WP_Error( 'invalid_performer', __( 'Invalid performer.', 'peanut-booker' ) );
+        }
+
+        $hourly_rate = floatval( $performer->hourly_rate );
+        if ( $hourly_rate <= 0 ) {
+            return new WP_Error( 'no_rate', __( 'Performer has no hourly rate configured.', 'peanut-booker' ) );
+        }
+
+        // Calculate duration in hours.
+        $duration_hours = 1; // Default minimum of 1 hour.
+
+        if ( ! empty( $event_start_time ) && ! empty( $event_end_time ) ) {
+            $start = strtotime( $event_start_time );
+            $end   = strtotime( $event_end_time );
+
+            if ( $start !== false && $end !== false && $end > $start ) {
+                $duration_hours = ( $end - $start ) / 3600;
+                // Round up to nearest 0.5 hour.
+                $duration_hours = ceil( $duration_hours * 2 ) / 2;
+            }
+        }
+
+        // Minimum 1 hour.
+        $duration_hours = max( 1, $duration_hours );
+
+        return round( $hourly_rate * $duration_hours, 2 );
+    }
+
+    /**
+     * Verify client-provided amount against calculated server-side amount.
+     *
+     * @param float  $client_amount    Amount provided by client.
+     * @param float  $calculated_amount Server-calculated amount.
+     * @param float  $tolerance_percent Allowed difference percentage (default 1%).
+     * @return bool|WP_Error True if valid, WP_Error if not.
+     */
+    public static function verify_booking_amount( $client_amount, $calculated_amount, $tolerance_percent = 1.0 ) {
+        if ( $calculated_amount <= 0 ) {
+            return new WP_Error( 'invalid_calculated', __( 'Invalid calculated amount.', 'peanut-booker' ) );
+        }
+
+        $difference_percent = abs( ( $client_amount - $calculated_amount ) / $calculated_amount ) * 100;
+
+        if ( $difference_percent > $tolerance_percent ) {
+            // Log the discrepancy for audit.
+            error_log( sprintf(
+                '[Peanut Booker Security] Amount discrepancy detected: client=%.2f, calculated=%.2f, difference=%.2f%%',
+                $client_amount,
+                $calculated_amount,
+                $difference_percent
+            ) );
+
+            return new WP_Error(
+                'amount_mismatch',
+                sprintf(
+                    __( 'Booking amount does not match performer rate. Expected: $%.2f', 'peanut-booker' ),
+                    $calculated_amount
+                )
+            );
+        }
+
+        return true;
+    }
+
+    /**
      * Create a new booking.
      *
      * @param array $data Booking data.
@@ -72,10 +147,37 @@ class Peanut_Booker_Booking {
             }
         }
 
-        // Get performer to calculate deposit.
+        // Get performer and verify they exist and are active.
         $performer = Peanut_Booker_Performer::get( $data['performer_id'] );
         if ( ! $performer ) {
             return new WP_Error( 'invalid_performer', __( 'Invalid performer.', 'peanut-booker' ) );
+        }
+
+        // Verify performer is active and has a published profile.
+        if ( $performer->status !== 'approved' ) {
+            return new WP_Error( 'performer_inactive', __( 'Performer is not currently accepting bookings.', 'peanut-booker' ) );
+        }
+
+        if ( $performer->profile_id && get_post_status( $performer->profile_id ) !== 'publish' ) {
+            return new WP_Error( 'performer_unavailable', __( 'Performer profile is unavailable.', 'peanut-booker' ) );
+        }
+
+        // Server-side amount verification (if performer has hourly rate).
+        if ( $performer->hourly_rate > 0 ) {
+            $calculated_amount = self::calculate_booking_total(
+                $data['performer_id'],
+                $data['event_start_time'] ?? '',
+                $data['event_end_time'] ?? ''
+            );
+
+            if ( ! is_wp_error( $calculated_amount ) ) {
+                $client_amount = floatval( $data['total_amount'] );
+                $verify_result = self::verify_booking_amount( $client_amount, $calculated_amount );
+
+                if ( is_wp_error( $verify_result ) ) {
+                    return $verify_result;
+                }
+            }
         }
 
         // Calculate amounts.
@@ -125,6 +227,9 @@ class Peanut_Booker_Booking {
             'notes'               => sanitize_textarea_field( $data['notes'] ?? '' ),
         );
 
+        // Encrypt sensitive fields before storage.
+        $booking_data = Peanut_Booker_Encryption::encrypt_booking_data( $booking_data );
+
         $booking_id = Peanut_Booker_Database::insert( 'bookings', $booking_data );
 
         if ( ! $booking_id ) {
@@ -156,7 +261,14 @@ class Peanut_Booker_Booking {
      * @return object|null Booking object or null.
      */
     public static function get( $booking_id ) {
-        return Peanut_Booker_Database::get_row( 'bookings', array( 'id' => $booking_id ) );
+        $booking = Peanut_Booker_Database::get_row( 'bookings', array( 'id' => $booking_id ) );
+
+        // Decrypt sensitive fields.
+        if ( $booking ) {
+            $booking = Peanut_Booker_Encryption::decrypt_booking_data( $booking );
+        }
+
+        return $booking;
     }
 
     /**
@@ -166,7 +278,14 @@ class Peanut_Booker_Booking {
      * @return object|null Booking object or null.
      */
     public static function get_by_number( $booking_number ) {
-        return Peanut_Booker_Database::get_row( 'bookings', array( 'booking_number' => $booking_number ) );
+        $booking = Peanut_Booker_Database::get_row( 'bookings', array( 'booking_number' => $booking_number ) );
+
+        // Decrypt sensitive fields.
+        if ( $booking ) {
+            $booking = Peanut_Booker_Encryption::decrypt_booking_data( $booking );
+        }
+
+        return $booking;
     }
 
     /**
@@ -584,6 +703,9 @@ class Peanut_Booker_Booking {
         if ( ! $booking ) {
             return array();
         }
+
+        // Decrypt sensitive fields.
+        $booking = Peanut_Booker_Encryption::decrypt_booking_data( $booking );
 
         // Get performer data.
         $performer      = Peanut_Booker_Performer::get( $booking->performer_id );

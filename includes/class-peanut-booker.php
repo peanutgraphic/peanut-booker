@@ -73,6 +73,9 @@ class Peanut_Booker {
         // Audit logging for security and compliance.
         require_once PEANUT_BOOKER_PATH . 'includes/class-audit-log.php';
 
+        // Data encryption for sensitive fields.
+        require_once PEANUT_BOOKER_PATH . 'includes/class-encryption.php';
+
         // User roles and capabilities.
         require_once PEANUT_BOOKER_PATH . 'includes/class-roles.php';
 

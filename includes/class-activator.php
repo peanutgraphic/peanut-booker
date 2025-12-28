@@ -101,7 +101,7 @@ class Peanut_Booker_Activator {
             event_address text,
             event_city varchar(100) DEFAULT NULL,
             event_state varchar(100) DEFAULT NULL,
-            event_zip varchar(20) DEFAULT NULL,
+            event_zip varchar(255) DEFAULT NULL,
             total_amount decimal(10,2) NOT NULL,
             deposit_amount decimal(10,2) NOT NULL,
             remaining_amount decimal(10,2) NOT NULL,

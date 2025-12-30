@@ -1,0 +1,842 @@
+<?php
+/**
+ * Booking engine functionality.
+ *
+ * @package Peanut_Booker
+ * @since   1.0.0
+ */
+
+if ( ! defined( 'WPINC' ) ) {
+    die;
+}
+
+/**
+ * Booking engine class.
+ */
+class Peanut_Booker_Booking {
+
+    /**
+     * Booking statuses.
+     */
+    const STATUS_PENDING    = 'pending';
+    const STATUS_CONFIRMED  = 'confirmed';
+    const STATUS_IN_PROGRESS = 'in_progress';
+    const STATUS_COMPLETED  = 'completed';
+    const STATUS_CANCELLED  = 'cancelled';
+    const STATUS_DISPUTED   = 'disputed';
+
+    /**
+     * Escrow statuses.
+     */
+    const ESCROW_PENDING   = 'pending';
+    const ESCROW_DEPOSIT   = 'deposit_held';
+    const ESCROW_FULL      = 'full_held';
+    const ESCROW_RELEASED  = 'released';
+    const ESCROW_REFUNDED  = 'refunded';
+
+    /**
+     * Constructor.
+     */
+    public function __construct() {
+        add_action( 'wp_ajax_pb_create_booking', array( $this, 'ajax_create_booking' ) );
+        add_action( 'wp_ajax_pb_confirm_booking', array( $this, 'ajax_confirm_booking' ) );
+        add_action( 'wp_ajax_pb_complete_booking', array( $this, 'ajax_complete_booking' ) );
+        add_action( 'wp_ajax_pb_cancel_booking', array( $this, 'ajax_cancel_booking' ) );
+
+        // Scheduled tasks.
+        add_action( 'peanut_booker_check_escrow_releases', array( $this, 'process_auto_releases' ) );
+        add_action( 'peanut_booker_send_reminders', array( $this, 'send_booking_reminders' ) );
+
+        // Schedule cron if not scheduled.
+        if ( ! wp_next_scheduled( 'peanut_booker_check_escrow_releases' ) ) {
+            wp_schedule_event( time(), 'daily', 'peanut_booker_check_escrow_releases' );
+        }
+
+        if ( ! wp_next_scheduled( 'peanut_booker_send_reminders' ) ) {
+            wp_schedule_event( time(), 'daily', 'peanut_booker_send_reminders' );
+        }
+    }
+
+    /**
+     * Create a new booking.
+     *
+     * @param array $data Booking data.
+     * @return int|WP_Error Booking ID or error.
+     */
+    public static function create( $data ) {
+        $required = array( 'performer_id', 'customer_id', 'event_date', 'total_amount' );
+
+        foreach ( $required as $field ) {
+            if ( empty( $data[ $field ] ) ) {
+                return new WP_Error( 'missing_field', sprintf( __( 'Missing required field: %s', 'peanut-booker' ), $field ) );
+            }
+        }
+
+        // Get performer to calculate deposit.
+        $performer = Peanut_Booker_Performer::get( $data['performer_id'] );
+        if ( ! $performer ) {
+            return new WP_Error( 'invalid_performer', __( 'Invalid performer.', 'peanut-booker' ) );
+        }
+
+        // Calculate amounts.
+        $total_amount       = floatval( $data['total_amount'] );
+        $deposit_percentage = $performer->deposit_percentage;
+        $deposit_amount     = round( $total_amount * ( $deposit_percentage / 100 ), 2 );
+        $remaining_amount   = $total_amount - $deposit_amount;
+
+        // Calculate commission.
+        $commission_rate    = Peanut_Booker_Roles::get_commission_rate( $performer->tier );
+        $platform_commission = round( $total_amount * ( $commission_rate / 100 ), 2 );
+
+        // Add flat fee if configured.
+        $options  = get_option( 'peanut_booker_settings', array() );
+        $flat_fee = isset( $options['commission_flat_fee'] ) ? floatval( $options['commission_flat_fee'] ) : 0;
+        $platform_commission += $flat_fee;
+
+        $performer_payout = $total_amount - $platform_commission;
+
+        // Generate booking number.
+        $booking_number = Peanut_Booker_Database::generate_booking_number();
+
+        // Prepare booking data.
+        $booking_data = array(
+            'booking_number'      => $booking_number,
+            'performer_id'        => $data['performer_id'],
+            'customer_id'         => $data['customer_id'],
+            'event_id'            => $data['event_id'] ?? null,
+            'bid_id'              => $data['bid_id'] ?? null,
+            'event_title'         => sanitize_text_field( $data['event_title'] ?? '' ),
+            'event_description'   => sanitize_textarea_field( $data['event_description'] ?? '' ),
+            'event_date'          => sanitize_text_field( $data['event_date'] ),
+            'event_start_time'    => sanitize_text_field( $data['event_start_time'] ?? '' ),
+            'event_end_time'      => sanitize_text_field( $data['event_end_time'] ?? '' ),
+            'event_location'      => sanitize_text_field( $data['event_location'] ?? '' ),
+            'event_address'       => sanitize_textarea_field( $data['event_address'] ?? '' ),
+            'event_city'          => sanitize_text_field( $data['event_city'] ?? '' ),
+            'event_state'         => sanitize_text_field( $data['event_state'] ?? '' ),
+            'event_zip'           => sanitize_text_field( $data['event_zip'] ?? '' ),
+            'total_amount'        => $total_amount,
+            'deposit_amount'      => $deposit_amount,
+            'remaining_amount'    => $remaining_amount,
+            'platform_commission' => $platform_commission,
+            'performer_payout'    => $performer_payout,
+            'escrow_status'       => self::ESCROW_PENDING,
+            'booking_status'      => self::STATUS_PENDING,
+            'notes'               => sanitize_textarea_field( $data['notes'] ?? '' ),
+        );
+
+        $booking_id = Peanut_Booker_Database::insert( 'bookings', $booking_data );
+
+        if ( ! $booking_id ) {
+            return new WP_Error( 'insert_failed', __( 'Failed to create booking.', 'peanut-booker' ) );
+        }
+
+        // Block performer's calendar.
+        Peanut_Booker_Availability::block_date(
+            $data['performer_id'],
+            $data['event_date'],
+            $booking_id,
+            $data['event_start_time'] ?? null,
+            $data['event_end_time'] ?? null
+        );
+
+        // Trigger actions.
+        do_action( 'peanut_booker_booking_created', $booking_id, $booking_data );
+
+        // Send notification to performer.
+        Peanut_Booker_Notifications::send( 'new_booking', $booking_id );
+
+        return $booking_id;
+    }
+
+    /**
+     * Get booking by ID.
+     *
+     * @param int $booking_id Booking ID.
+     * @return object|null Booking object or null.
+     */
+    public static function get( $booking_id ) {
+        return Peanut_Booker_Database::get_row( 'bookings', array( 'id' => $booking_id ) );
+    }
+
+    /**
+     * Get booking by booking number.
+     *
+     * @param string $booking_number Booking number.
+     * @return object|null Booking object or null.
+     */
+    public static function get_by_number( $booking_number ) {
+        return Peanut_Booker_Database::get_row( 'bookings', array( 'booking_number' => $booking_number ) );
+    }
+
+    /**
+     * Get bookings for a customer.
+     *
+     * @param int    $customer_id Customer user ID.
+     * @param string $status      Optional status filter.
+     * @param int    $limit       Number of bookings to return.
+     * @param int    $offset      Offset for pagination.
+     * @return array Array of bookings.
+     */
+    public static function get_customer_bookings( $customer_id, $status = '', $limit = 10, $offset = 0 ) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'pb_bookings';
+
+        $where = $wpdb->prepare( "customer_id = %d", $customer_id );
+        if ( ! empty( $status ) ) {
+            $where .= $wpdb->prepare( " AND booking_status = %s", $status );
+        }
+
+        $bookings = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT * FROM $table WHERE $where ORDER BY event_date DESC LIMIT %d OFFSET %d",
+                $limit,
+                $offset
+            )
+        );
+
+        return array_map( array( __CLASS__, 'format_booking_data' ), $bookings );
+    }
+
+    /**
+     * Get bookings for a performer.
+     *
+     * @param int    $performer_id Performer ID (from performers table).
+     * @param string $status       Optional status filter.
+     * @param int    $limit        Number of bookings to return.
+     * @param int    $offset       Offset for pagination.
+     * @return array Array of bookings.
+     */
+    public static function get_performer_bookings( $performer_id, $status = '', $limit = 10, $offset = 0 ) {
+        global $wpdb;
+        $table = $wpdb->prefix . 'pb_bookings';
+
+        $where = $wpdb->prepare( "performer_id = %d", $performer_id );
+        if ( ! empty( $status ) ) {
+            $where .= $wpdb->prepare( " AND booking_status = %s", $status );
+        }
+
+        $bookings = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT * FROM $table WHERE $where ORDER BY event_date DESC LIMIT %d OFFSET %d",
+                $limit,
+                $offset
+            )
+        );
+
+        return array_map( array( __CLASS__, 'format_booking_data' ), $bookings );
+    }
+
+    /**
+     * Update booking.
+     *
+     * @param int   $booking_id Booking ID.
+     * @param array $data       Data to update.
+     * @return bool Success.
+     */
+    public static function update( $booking_id, $data ) {
+        $result = Peanut_Booker_Database::update( 'bookings', $data, array( 'id' => $booking_id ) );
+
+        if ( $result !== false ) {
+            do_action( 'peanut_booker_booking_updated', $booking_id, $data );
+        }
+
+        return $result !== false;
+    }
+
+    /**
+     * Update booking status.
+     *
+     * @param int    $booking_id Booking ID.
+     * @param string $status     New status.
+     * @return bool Success.
+     */
+    public static function update_status( $booking_id, $status ) {
+        $booking = self::get( $booking_id );
+        if ( ! $booking ) {
+            return false;
+        }
+
+        $old_status = $booking->booking_status;
+        $result     = self::update( $booking_id, array( 'booking_status' => $status ) );
+
+        if ( $result ) {
+            do_action( 'peanut_booker_booking_status_changed', $booking_id, $status, $old_status );
+
+            // Handle status-specific actions.
+            switch ( $status ) {
+                case self::STATUS_CONFIRMED:
+                    Peanut_Booker_Notifications::send( 'booking_confirmed', $booking_id );
+                    break;
+
+                case self::STATUS_COMPLETED:
+                    self::update( $booking_id, array( 'completion_date' => current_time( 'mysql' ) ) );
+                    self::process_completion( $booking_id );
+                    break;
+
+                case self::STATUS_CANCELLED:
+                    self::process_cancellation( $booking_id );
+                    break;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Performer confirms the booking.
+     *
+     * @param int $booking_id Booking ID.
+     * @param int $performer_user_id Performer user ID.
+     * @return bool|WP_Error Success or error.
+     */
+    public static function performer_confirm( $booking_id, $performer_user_id ) {
+        $booking = self::get( $booking_id );
+        if ( ! $booking ) {
+            return new WP_Error( 'not_found', __( 'Booking not found.', 'peanut-booker' ) );
+        }
+
+        $performer = Peanut_Booker_Performer::get_by_user_id( $performer_user_id );
+        if ( ! $performer || (int) $performer->id !== (int) $booking->performer_id ) {
+            return new WP_Error( 'not_authorized', __( 'Not authorized.', 'peanut-booker' ) );
+        }
+
+        if ( $booking->booking_status !== self::STATUS_PENDING ) {
+            return new WP_Error( 'invalid_status', __( 'Booking cannot be confirmed.', 'peanut-booker' ) );
+        }
+
+        self::update( $booking_id, array( 'performer_confirmed' => 1 ) );
+
+        // If deposit is already paid, confirm the booking.
+        if ( $booking->deposit_paid ) {
+            self::update_status( $booking_id, self::STATUS_CONFIRMED );
+        }
+
+        return true;
+    }
+
+    /**
+     * Customer confirms event completion.
+     *
+     * @param int $booking_id Booking ID.
+     * @param int $customer_id Customer user ID.
+     * @return bool|WP_Error Success or error.
+     */
+    public static function customer_confirm_completion( $booking_id, $customer_id ) {
+        $booking = self::get( $booking_id );
+        if ( ! $booking ) {
+            return new WP_Error( 'not_found', __( 'Booking not found.', 'peanut-booker' ) );
+        }
+
+        if ( (int) $booking->customer_id !== $customer_id ) {
+            return new WP_Error( 'not_authorized', __( 'Not authorized.', 'peanut-booker' ) );
+        }
+
+        if ( $booking->booking_status !== self::STATUS_CONFIRMED ) {
+            return new WP_Error( 'invalid_status', __( 'Booking is not in confirmed status.', 'peanut-booker' ) );
+        }
+
+        // Check if event date has passed.
+        $event_date = strtotime( $booking->event_date );
+        if ( $event_date > strtotime( 'today' ) ) {
+            return new WP_Error( 'too_early', __( 'Cannot complete booking before event date.', 'peanut-booker' ) );
+        }
+
+        self::update(
+            $booking_id,
+            array(
+                'customer_confirmed_completion' => 1,
+                'completion_date'               => current_time( 'mysql' ),
+            )
+        );
+
+        self::update_status( $booking_id, self::STATUS_COMPLETED );
+
+        return true;
+    }
+
+    /**
+     * Process booking completion - release escrow.
+     *
+     * @param int $booking_id Booking ID.
+     */
+    public static function process_completion( $booking_id ) {
+        $booking = self::get( $booking_id );
+        if ( ! $booking ) {
+            return;
+        }
+
+        // Release escrow to performer.
+        self::release_escrow( $booking_id );
+
+        // Update performer stats.
+        $performer = Peanut_Booker_Performer::get( $booking->performer_id );
+        if ( $performer ) {
+            Peanut_Booker_Performer::update(
+                $performer->id,
+                array( 'completed_bookings' => $performer->completed_bookings + 1 )
+            );
+
+            // Recalculate achievement score.
+            Peanut_Booker_Performer::calculate_achievement_score( $performer->id );
+        }
+
+        // Send completion notifications.
+        Peanut_Booker_Notifications::send( 'booking_completed', $booking_id );
+
+        do_action( 'peanut_booker_booking_completed', $booking_id, $booking );
+    }
+
+    /**
+     * Process booking cancellation.
+     *
+     * @param int $booking_id Booking ID.
+     */
+    public static function process_cancellation( $booking_id ) {
+        $booking = self::get( $booking_id );
+        if ( ! $booking ) {
+            return;
+        }
+
+        // Unblock performer's calendar.
+        Peanut_Booker_Availability::unblock_date( $booking->performer_id, $booking->event_date, $booking_id );
+
+        // Handle refund if applicable.
+        if ( $booking->deposit_paid || $booking->fully_paid ) {
+            // Refund logic - depends on cancellation policy.
+            self::process_refund( $booking_id );
+        }
+
+        // Send cancellation notifications.
+        Peanut_Booker_Notifications::send( 'booking_cancelled', $booking_id );
+
+        do_action( 'peanut_booker_booking_cancelled', $booking_id, $booking );
+    }
+
+    /**
+     * Release escrow funds to performer.
+     *
+     * @param int $booking_id Booking ID.
+     * @return bool Success.
+     */
+    public static function release_escrow( $booking_id ) {
+        $booking = self::get( $booking_id );
+        if ( ! $booking ) {
+            return false;
+        }
+
+        // Record transaction.
+        Peanut_Booker_Database::insert(
+            'transactions',
+            array(
+                'booking_id'       => $booking_id,
+                'order_id'         => $booking->order_id,
+                'transaction_type' => 'escrow_release',
+                'amount'           => $booking->performer_payout,
+                'payee_id'         => $booking->performer_id,
+                'status'           => 'completed',
+                'notes'            => __( 'Escrow released to performer', 'peanut-booker' ),
+            )
+        );
+
+        // Update booking escrow status.
+        self::update(
+            $booking_id,
+            array(
+                'escrow_status' => self::ESCROW_RELEASED,
+                'payout_date'   => current_time( 'mysql' ),
+            )
+        );
+
+        // Send payout notification.
+        Peanut_Booker_Notifications::send( 'escrow_released', $booking_id );
+
+        do_action( 'peanut_booker_escrow_released', $booking_id, $booking->performer_payout );
+
+        return true;
+    }
+
+    /**
+     * Process refund for cancelled booking.
+     *
+     * @param int $booking_id Booking ID.
+     */
+    public static function process_refund( $booking_id ) {
+        $booking = self::get( $booking_id );
+        if ( ! $booking ) {
+            return;
+        }
+
+        // Refund amount depends on cancellation timing and policy.
+        // For now, full refund if cancelled before event.
+        $refund_amount = $booking->deposit_paid ? $booking->deposit_amount : 0;
+        if ( $booking->fully_paid ) {
+            $refund_amount = $booking->total_amount;
+        }
+
+        if ( $refund_amount > 0 ) {
+            // Process WooCommerce refund if order exists.
+            if ( $booking->order_id && function_exists( 'wc_create_refund' ) ) {
+                $order = wc_get_order( $booking->order_id );
+                if ( $order ) {
+                    wc_create_refund(
+                        array(
+                            'order_id' => $booking->order_id,
+                            'amount'   => $refund_amount,
+                            'reason'   => __( 'Booking cancelled', 'peanut-booker' ),
+                        )
+                    );
+                }
+            }
+
+            // Record transaction.
+            Peanut_Booker_Database::insert(
+                'transactions',
+                array(
+                    'booking_id'       => $booking_id,
+                    'order_id'         => $booking->order_id,
+                    'transaction_type' => 'refund',
+                    'amount'           => $refund_amount,
+                    'payer_id'         => $booking->customer_id,
+                    'status'           => 'completed',
+                    'notes'            => __( 'Refund for cancelled booking', 'peanut-booker' ),
+                )
+            );
+
+            self::update( $booking_id, array( 'escrow_status' => self::ESCROW_REFUNDED ) );
+        }
+
+        do_action( 'peanut_booker_booking_refunded', $booking_id, $refund_amount );
+    }
+
+    /**
+     * Process automatic escrow releases for completed events.
+     */
+    public function process_auto_releases() {
+        global $wpdb;
+
+        $options           = get_option( 'peanut_booker_settings', array() );
+        $auto_release_days = isset( $options['escrow_auto_release_days'] ) ? intval( $options['escrow_auto_release_days'] ) : 7;
+
+        $table     = $wpdb->prefix . 'pb_bookings';
+        $threshold = gmdate( 'Y-m-d', strtotime( "-{$auto_release_days} days" ) );
+
+        // Find bookings that should be auto-released.
+        $bookings = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT id FROM $table
+                WHERE booking_status = 'confirmed'
+                AND escrow_status IN ('deposit_held', 'full_held')
+                AND event_date <= %s
+                AND customer_confirmed_completion = 0",
+                $threshold
+            )
+        );
+
+        foreach ( $bookings as $booking ) {
+            // Auto-complete and release escrow.
+            self::update_status( $booking->id, self::STATUS_COMPLETED );
+        }
+    }
+
+    /**
+     * Send booking reminders.
+     */
+    public function send_booking_reminders() {
+        global $wpdb;
+
+        $table    = $wpdb->prefix . 'pb_bookings';
+        $tomorrow = gmdate( 'Y-m-d', strtotime( '+1 day' ) );
+        $week     = gmdate( 'Y-m-d', strtotime( '+7 days' ) );
+
+        // Get bookings happening tomorrow.
+        $tomorrow_bookings = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT id FROM $table WHERE event_date = %s AND booking_status = 'confirmed'",
+                $tomorrow
+            )
+        );
+
+        foreach ( $tomorrow_bookings as $booking ) {
+            Peanut_Booker_Notifications::send( 'booking_reminder_1day', $booking->id );
+        }
+
+        // Get bookings happening in a week.
+        $week_bookings = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT id FROM $table WHERE event_date = %s AND booking_status = 'confirmed'",
+                $week
+            )
+        );
+
+        foreach ( $week_bookings as $booking ) {
+            Peanut_Booker_Notifications::send( 'booking_reminder_7day', $booking->id );
+        }
+    }
+
+    /**
+     * Format booking data for display.
+     *
+     * @param object $booking Booking object from database.
+     * @return array Formatted booking data.
+     */
+    public static function format_booking_data( $booking ) {
+        if ( ! $booking ) {
+            return array();
+        }
+
+        // Get performer data.
+        $performer      = Peanut_Booker_Performer::get( $booking->performer_id );
+        $performer_data = array();
+
+        if ( $performer && $performer->profile_id ) {
+            $performer_data = Peanut_Booker_Performer::get_display_data( $performer->profile_id );
+        }
+
+        // Get customer data.
+        $customer = Peanut_Booker_Customer::get( $booking->customer_id );
+
+        return array(
+            'id'                => $booking->id,
+            'booking_number'    => $booking->booking_number,
+            'event_title'       => $booking->event_title,
+            'event_description' => $booking->event_description,
+            'event_date'        => $booking->event_date,
+            'event_date_formatted' => date_i18n( get_option( 'date_format' ), strtotime( $booking->event_date ) ),
+            'event_start_time'  => $booking->event_start_time,
+            'event_end_time'    => $booking->event_end_time,
+            'event_location'    => $booking->event_location,
+            'event_address'     => $booking->event_address,
+            'event_city'        => $booking->event_city,
+            'event_state'       => $booking->event_state,
+            'event_zip'         => $booking->event_zip,
+            'total_amount'      => floatval( $booking->total_amount ),
+            'deposit_amount'    => floatval( $booking->deposit_amount ),
+            'remaining_amount'  => floatval( $booking->remaining_amount ),
+            'deposit_paid'      => (bool) $booking->deposit_paid,
+            'fully_paid'        => (bool) $booking->fully_paid,
+            'escrow_status'     => $booking->escrow_status,
+            'booking_status'    => $booking->booking_status,
+            'status_label'      => self::get_status_label( $booking->booking_status ),
+            'performer'         => $performer_data,
+            'customer'          => $customer,
+            'performer_confirmed' => (bool) $booking->performer_confirmed,
+            'customer_confirmed_completion' => (bool) $booking->customer_confirmed_completion,
+            'created_at'        => $booking->created_at,
+            'can_cancel'        => self::can_cancel( $booking ),
+            'can_complete'      => self::can_complete( $booking ),
+        );
+    }
+
+    /**
+     * Get human-readable status label.
+     *
+     * @param string $status Status code.
+     * @return string Status label.
+     */
+    public static function get_status_label( $status ) {
+        $labels = array(
+            self::STATUS_PENDING     => __( 'Pending', 'peanut-booker' ),
+            self::STATUS_CONFIRMED   => __( 'Confirmed', 'peanut-booker' ),
+            self::STATUS_IN_PROGRESS => __( 'In Progress', 'peanut-booker' ),
+            self::STATUS_COMPLETED   => __( 'Completed', 'peanut-booker' ),
+            self::STATUS_CANCELLED   => __( 'Cancelled', 'peanut-booker' ),
+            self::STATUS_DISPUTED    => __( 'Disputed', 'peanut-booker' ),
+        );
+
+        return $labels[ $status ] ?? $status;
+    }
+
+    /**
+     * Check if booking can be cancelled.
+     *
+     * @param object $booking Booking object.
+     * @return bool
+     */
+    public static function can_cancel( $booking ) {
+        // Can't cancel completed or already cancelled bookings.
+        if ( in_array( $booking->booking_status, array( self::STATUS_COMPLETED, self::STATUS_CANCELLED ), true ) ) {
+            return false;
+        }
+
+        // Can't cancel if event has started.
+        $event_datetime = $booking->event_date . ' ' . ( $booking->event_start_time ?: '00:00:00' );
+        if ( strtotime( $event_datetime ) <= time() ) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Check if booking can be marked as complete.
+     *
+     * @param object $booking Booking object.
+     * @return bool
+     */
+    public static function can_complete( $booking ) {
+        // Must be confirmed.
+        if ( $booking->booking_status !== self::STATUS_CONFIRMED ) {
+            return false;
+        }
+
+        // Event date must have passed.
+        if ( strtotime( $booking->event_date ) > strtotime( 'today' ) ) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * AJAX: Create booking.
+     */
+    public function ajax_create_booking() {
+        check_ajax_referer( 'pb_booking_nonce', 'nonce' );
+
+        if ( ! is_user_logged_in() ) {
+            wp_send_json_error( array( 'message' => __( 'You must be logged in.', 'peanut-booker' ) ) );
+        }
+
+        $booking_data = array(
+            'performer_id'      => absint( $_POST['performer_id'] ?? 0 ),
+            'customer_id'       => get_current_user_id(),
+            'event_title'       => sanitize_text_field( $_POST['event_title'] ?? '' ),
+            'event_description' => sanitize_textarea_field( $_POST['event_description'] ?? '' ),
+            'event_date'        => sanitize_text_field( $_POST['event_date'] ?? '' ),
+            'event_start_time'  => sanitize_text_field( $_POST['event_start_time'] ?? '' ),
+            'event_end_time'    => sanitize_text_field( $_POST['event_end_time'] ?? '' ),
+            'event_location'    => sanitize_text_field( $_POST['event_location'] ?? '' ),
+            'event_address'     => sanitize_textarea_field( $_POST['event_address'] ?? '' ),
+            'event_city'        => sanitize_text_field( $_POST['event_city'] ?? '' ),
+            'event_state'       => sanitize_text_field( $_POST['event_state'] ?? '' ),
+            'event_zip'         => sanitize_text_field( $_POST['event_zip'] ?? '' ),
+            'total_amount'      => floatval( $_POST['total_amount'] ?? 0 ),
+            'notes'             => sanitize_textarea_field( $_POST['notes'] ?? '' ),
+        );
+
+        $result = self::create( $booking_data );
+
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( array( 'message' => $result->get_error_message() ) );
+        }
+
+        $booking = self::get( $result );
+
+        wp_send_json_success(
+            array(
+                'message'        => __( 'Booking created successfully.', 'peanut-booker' ),
+                'booking_id'     => $result,
+                'booking_number' => $booking->booking_number,
+                'checkout_url'   => self::get_checkout_url( $result ),
+            )
+        );
+    }
+
+    /**
+     * Get WooCommerce checkout URL for booking.
+     *
+     * @param int $booking_id Booking ID.
+     * @return string Checkout URL.
+     */
+    public static function get_checkout_url( $booking_id ) {
+        $booking = self::get( $booking_id );
+        if ( ! $booking ) {
+            return '';
+        }
+
+        // Add booking product to cart and redirect to checkout.
+        return add_query_arg(
+            array(
+                'pb_booking' => $booking_id,
+                'action'     => 'checkout',
+            ),
+            wc_get_checkout_url()
+        );
+    }
+
+    /**
+     * AJAX: Confirm booking (performer).
+     */
+    public function ajax_confirm_booking() {
+        check_ajax_referer( 'pb_booking_nonce', 'nonce' );
+
+        if ( ! is_user_logged_in() ) {
+            wp_send_json_error( array( 'message' => __( 'You must be logged in.', 'peanut-booker' ) ) );
+        }
+
+        $booking_id = absint( $_POST['booking_id'] ?? 0 );
+        $result     = self::performer_confirm( $booking_id, get_current_user_id() );
+
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( array( 'message' => $result->get_error_message() ) );
+        }
+
+        wp_send_json_success( array( 'message' => __( 'Booking confirmed.', 'peanut-booker' ) ) );
+    }
+
+    /**
+     * AJAX: Complete booking (customer).
+     */
+    public function ajax_complete_booking() {
+        check_ajax_referer( 'pb_booking_nonce', 'nonce' );
+
+        if ( ! is_user_logged_in() ) {
+            wp_send_json_error( array( 'message' => __( 'You must be logged in.', 'peanut-booker' ) ) );
+        }
+
+        $booking_id = absint( $_POST['booking_id'] ?? 0 );
+        $result     = self::customer_confirm_completion( $booking_id, get_current_user_id() );
+
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( array( 'message' => $result->get_error_message() ) );
+        }
+
+        wp_send_json_success( array( 'message' => __( 'Booking marked as complete. Funds will be released to performer.', 'peanut-booker' ) ) );
+    }
+
+    /**
+     * AJAX: Cancel booking.
+     */
+    public function ajax_cancel_booking() {
+        check_ajax_referer( 'pb_booking_nonce', 'nonce' );
+
+        if ( ! is_user_logged_in() ) {
+            wp_send_json_error( array( 'message' => __( 'You must be logged in.', 'peanut-booker' ) ) );
+        }
+
+        $booking_id = absint( $_POST['booking_id'] ?? 0 );
+        $reason     = sanitize_textarea_field( $_POST['reason'] ?? '' );
+        $user_id    = get_current_user_id();
+
+        $booking = self::get( $booking_id );
+        if ( ! $booking ) {
+            wp_send_json_error( array( 'message' => __( 'Booking not found.', 'peanut-booker' ) ) );
+        }
+
+        // Check authorization.
+        $performer = Peanut_Booker_Performer::get_by_user_id( $user_id );
+        $is_performer = $performer && (int) $performer->id === (int) $booking->performer_id;
+        $is_customer  = (int) $booking->customer_id === $user_id;
+
+        if ( ! $is_performer && ! $is_customer && ! current_user_can( 'pb_manage_bookings' ) ) {
+            wp_send_json_error( array( 'message' => __( 'Not authorized.', 'peanut-booker' ) ) );
+        }
+
+        if ( ! self::can_cancel( $booking ) ) {
+            wp_send_json_error( array( 'message' => __( 'This booking cannot be cancelled.', 'peanut-booker' ) ) );
+        }
+
+        self::update(
+            $booking_id,
+            array(
+                'cancellation_reason' => $reason,
+                'cancelled_by'        => $user_id,
+            )
+        );
+
+        self::update_status( $booking_id, self::STATUS_CANCELLED );
+
+        wp_send_json_success( array( 'message' => __( 'Booking cancelled.', 'peanut-booker' ) ) );
+    }
+}

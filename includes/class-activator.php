@@ -161,6 +161,7 @@ class Peanut_Booker_Activator {
             KEY reviewer_id (reviewer_id),
             KEY reviewee_id (reviewee_id),
             KEY reviewer_type (reviewer_type),
+            KEY reviewee_type (reviewee_id, reviewer_type),
             KEY is_flagged (is_flagged),
             KEY is_visible (is_visible)
         ) $charset_collate;";

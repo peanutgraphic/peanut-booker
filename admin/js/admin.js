@@ -27,15 +27,6 @@
             // Payout release.
             $(document).on('click', '.pb-release-payout', this.releasePayout);
 
-            // Bulk payout select all.
-            $(document).on('change', '#pb-select-all-payouts', this.selectAllPayouts);
-
-            // Bulk release selected payouts.
-            $(document).on('click', '.pb-bulk-release-selected', this.bulkReleaseSelected);
-
-            // Bulk release eligible payouts.
-            $(document).on('click', '.pb-bulk-release-eligible', this.bulkReleaseEligible);
-
             // Review arbitration.
             $(document).on('submit', '.pb-arbitration-form', this.handleArbitration);
 
@@ -119,85 +110,6 @@
                 error: function() {
                     PBAdmin.showNotice('Network error. Please try again.', 'error');
                     $btn.prop('disabled', false).text('Release');
-                }
-            });
-        },
-
-        /**
-         * Select all payouts checkbox.
-         */
-        selectAllPayouts: function() {
-            $('.pb-payout-checkbox').prop('checked', $(this).prop('checked'));
-        },
-
-        /**
-         * Bulk release selected payouts.
-         */
-        bulkReleaseSelected: function(e) {
-            e.preventDefault();
-
-            var selected = [];
-            $('.pb-payout-checkbox:checked').each(function() {
-                selected.push($(this).val());
-            });
-
-            if (selected.length === 0) {
-                PBAdmin.showNotice(pbAdmin.strings.selectAtLeastOne || 'Please select at least one booking.', 'warning');
-                return;
-            }
-
-            if (!confirm(pbAdmin.strings.confirmRelease || 'Release payouts for selected bookings?')) {
-                return;
-            }
-
-            $.ajax({
-                url: pbAdmin.ajaxUrl,
-                type: 'POST',
-                data: {
-                    action: 'pb_admin_bulk_release_payouts',
-                    booking_ids: selected,
-                    nonce: pbAdmin.nonce
-                },
-                success: function(response) {
-                    if (response.success) {
-                        location.reload();
-                    } else {
-                        PBAdmin.showNotice(response.data.message || pbAdmin.strings.errorPayouts || 'Error processing payouts.', 'error');
-                    }
-                },
-                error: function() {
-                    PBAdmin.showNotice(pbAdmin.strings.networkError || 'Network error. Please try again.', 'error');
-                }
-            });
-        },
-
-        /**
-         * Bulk release eligible payouts.
-         */
-        bulkReleaseEligible: function(e) {
-            e.preventDefault();
-
-            var confirmMsg = $(this).data('confirm') || pbAdmin.strings.confirm;
-            if (!confirm(confirmMsg)) {
-                return;
-            }
-
-            $.ajax({
-                url: pbAdmin.ajaxUrl,
-                type: 'POST',
-                data: {
-                    action: 'pb_admin_release_eligible_payouts',
-                    nonce: pbAdmin.nonce
-                },
-                success: function(response) {
-                    if (response.success) {
-                        location.reload();
-                    } else {
-                        PBAdmin.showNotice(response.data.message || pbAdmin.strings.errorPayouts || 'Error processing payouts.', 'error');
-                    }
-                },
-                error: function() {
-                    PBAdmin.showNotice(pbAdmin.strings.networkError || 'Network error. Please try again.', 'error');
                 }
             });
         },

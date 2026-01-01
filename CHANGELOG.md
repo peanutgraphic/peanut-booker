@@ -2,21 +2,6 @@
 
 All notable changes to Peanut Booker will be documented in this file.
 
-## [1.5.1] - 2024-12-21
-
-### Added
-- **Site Health Monitoring** - Daily health reports to license server
-  - Automatic daily health checks sent to license server
-  - Reports: plugin version, WP version, PHP version, multisite status
-  - Detects common issues (outdated PHP/WP, debug mode)
-  - Viewable in License Server's Site Health dashboard
-- **Activation Limit Handling** - Clear messaging when at site limit
-  - `is_at_activation_limit()` method to check status
-  - `render_activation_limit_notice()` - Displays upgrade prompt
-  - Direct links to upgrade and manage activations
-- **License Status Widget** - `render_status_widget()` for dashboards
-- **Activation Info API** - `get_activation_info()` to view all active sites
-
 ## [1.5.0] - 2024-12-19
 
 ### Added

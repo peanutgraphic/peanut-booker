@@ -27,6 +27,44 @@ class Peanut_Booker_REST_API {
      */
     public function __construct() {
         add_action( 'rest_api_init', array( $this, 'register_routes' ) );
+
+        // Apply rate limiting to all plugin REST API requests.
+        add_filter( 'rest_pre_dispatch', array( $this, 'apply_rate_limiting' ), 10, 3 );
+    }
+
+    /**
+     * Apply rate limiting to REST API requests.
+     *
+     * @param mixed           $result  Response to replace the requested version with.
+     * @param WP_REST_Server  $server  Server instance.
+     * @param WP_REST_Request $request Request used to generate the response.
+     * @return mixed|WP_REST_Response
+     */
+    public function apply_rate_limiting( $result, $server, $request ) {
+        // Only apply to our namespace.
+        $route = $request->get_route();
+        if ( strpos( $route, '/' . $this->namespace ) !== 0 ) {
+            return $result;
+        }
+
+        // Skip rate limiting for specific endpoints that have their own limits.
+        $skip_patterns = array(
+            '/bookings$', // Has specific 'booking' rate limit.
+        );
+
+        foreach ( $skip_patterns as $pattern ) {
+            if ( preg_match( '#' . $pattern . '#', $route ) && 'POST' === $request->get_method() ) {
+                return $result;
+            }
+        }
+
+        // Apply general rate limiting.
+        $rate_check = Peanut_Booker_Rate_Limiter::check_or_respond( 'public' );
+        if ( null !== $rate_check ) {
+            return $rate_check;
+        }
+
+        return $result;
     }
 
     /**
@@ -157,6 +195,17 @@ class Peanut_Booker_REST_API {
             array(
                 'methods'             => WP_REST_Server::READABLE,
                 'callback'            => array( $this, 'get_featured_performers' ),
+                'permission_callback' => '__return_true',
+            )
+        );
+
+        // Microsite page view tracking (public).
+        register_rest_route(
+            $this->namespace,
+            '/microsites/(?P<slug>[a-zA-Z0-9-]+)/track',
+            array(
+                'methods'             => WP_REST_Server::CREATABLE,
+                'callback'            => array( $this, 'track_microsite_view' ),
                 'permission_callback' => '__return_true',
             )
         );
@@ -392,6 +441,12 @@ class Peanut_Booker_REST_API {
      * @return WP_REST_Response|WP_Error
      */
     public function create_booking( $request ) {
+        // Apply strict rate limiting for booking creation.
+        $rate_limit = Peanut_Booker_Rate_Limiter::check_or_respond( 'booking' );
+        if ( null !== $rate_limit ) {
+            return $rate_limit;
+        }
+
         $data = array(
             'performer_id'      => $request['performer_id'],
             'customer_id'       => get_current_user_id(),
@@ -505,5 +560,87 @@ class Peanut_Booker_REST_API {
         $performers = Peanut_Booker_Performer::get_featured( $limit );
 
         return rest_ensure_response( $performers );
+    }
+
+    /**
+     * Track microsite page view.
+     *
+     * @param WP_REST_Request $request Request object.
+     * @return WP_REST_Response|WP_Error
+     */
+    public function track_microsite_view( $request ) {
+        global $wpdb;
+
+        $slug = sanitize_title( $request['slug'] );
+
+        // Get microsite by slug.
+        $microsite = Peanut_Booker_Database::get_row( 'microsites', array( 'slug' => $slug ) );
+
+        if ( ! $microsite ) {
+            return new WP_Error( 'not_found', __( 'Microsite not found.', 'peanut-booker' ), array( 'status' => 404 ) );
+        }
+
+        $params = $request->get_json_params();
+        $event_type = sanitize_text_field( $params['event'] ?? 'page_view' );
+
+        // Get referrer domain (hash the full referrer to protect privacy).
+        $referrer_domain = '';
+        if ( ! empty( $params['referrer'] ) ) {
+            $parsed = wp_parse_url( $params['referrer'] );
+            $referrer_domain = isset( $parsed['host'] ) ? sanitize_text_field( $parsed['host'] ) : '';
+        }
+
+        $date = gmdate( 'Y-m-d' );
+        $hour = (int) gmdate( 'H' );
+
+        $analytics_table = $wpdb->prefix . 'pb_microsite_analytics';
+
+        // Try to update existing row for this microsite/date/hour/referrer combination.
+        $existing = $wpdb->get_row( $wpdb->prepare(
+            "SELECT id FROM $analytics_table
+             WHERE microsite_id = %d AND date = %s AND hour_of_day = %d AND (referrer_domain = %s OR (referrer_domain IS NULL AND %s = ''))",
+            $microsite->id,
+            $date,
+            $hour,
+            $referrer_domain,
+            $referrer_domain
+        ) );
+
+        if ( $existing ) {
+            // Update existing row.
+            $update_field = 'page_views';
+            if ( 'booking_click' === $event_type ) {
+                $update_field = 'booking_clicks';
+            }
+
+            $wpdb->query( $wpdb->prepare(
+                "UPDATE $analytics_table SET $update_field = $update_field + 1 WHERE id = %d",
+                $existing->id
+            ) );
+        } else {
+            // Insert new row.
+            $wpdb->insert(
+                $analytics_table,
+                array(
+                    'microsite_id'    => $microsite->id,
+                    'date'            => $date,
+                    'hour_of_day'     => $hour,
+                    'referrer_domain' => $referrer_domain ?: null,
+                    'page_views'      => 'page_view' === $event_type ? 1 : 0,
+                    'unique_visitors' => 1, // First view in this hour from this referrer.
+                    'booking_clicks'  => 'booking_click' === $event_type ? 1 : 0,
+                )
+            );
+        }
+
+        // Also increment the total view_count on the microsite.
+        if ( 'page_view' === $event_type ) {
+            $wpdb->query( $wpdb->prepare(
+                "UPDATE {$wpdb->prefix}pb_microsites SET view_count = view_count + 1 WHERE id = %d",
+                $microsite->id
+            ) );
+        }
+
+        return rest_ensure_response( array( 'success' => true ) );
     }
 }

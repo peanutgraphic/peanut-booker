@@ -49,9 +49,40 @@ class Peanut_Booker_Admin {
     }
 
     /**
+     * Check if we're on a Peanut Booker admin page.
+     *
+     * @return bool
+     */
+    private function is_booker_admin_page() {
+        $screen = get_current_screen();
+        if ( ! $screen ) {
+            return false;
+        }
+
+        $booker_pages = array(
+            'toplevel_page_peanut-booker',
+            'peanut-booker_page_pb-performers',
+            'peanut-booker_page_pb-bookings',
+            'peanut-booker_page_pb-market',
+            'peanut-booker_page_pb-reviews',
+            'peanut-booker_page_pb-payouts',
+            'peanut-booker_page_pb-microsites',
+            'peanut-booker_page_pb-messages',
+            'peanut-booker_page_pb-customers',
+            'peanut-booker_page_pb-analytics',
+            'peanut-booker_page_pb-settings',
+            'peanut-booker_page_pb-demo',
+            'admin_page_pb-edit-performer',
+        );
+
+        return in_array( $screen->id, $booker_pages, true );
+    }
+
+    /**
      * Register the stylesheets for the admin area.
      */
     public function enqueue_styles() {
+        // Always enqueue base admin styles.
         wp_enqueue_style(
             $this->plugin_name,
             PEANUT_BOOKER_URL . 'admin/css/admin.css',
@@ -59,6 +90,11 @@ class Peanut_Booker_Admin {
             $this->version,
             'all'
         );
+
+        // Enqueue React app styles on Booker pages.
+        if ( $this->is_booker_admin_page() ) {
+            $this->enqueue_react_assets();
+        }
     }
 
     /**
@@ -80,16 +116,133 @@ class Peanut_Booker_Admin {
                 'ajaxUrl' => admin_url( 'admin-ajax.php' ),
                 'nonce'   => wp_create_nonce( 'pb_admin_nonce' ),
                 'strings' => array(
-                    'confirm'         => __( 'Are you sure?', 'peanut-booker' ),
-                    'saving'          => __( 'Saving...', 'peanut-booker' ),
-                    'saved'           => __( 'Saved!', 'peanut-booker' ),
-                    'selectAtLeastOne' => __( 'Please select at least one booking.', 'peanut-booker' ),
-                    'confirmRelease'  => __( 'Release payouts for selected bookings?', 'peanut-booker' ),
-                    'errorPayouts'    => __( 'Error processing payouts.', 'peanut-booker' ),
-                    'networkError'    => __( 'Network error. Please try again.', 'peanut-booker' ),
+                    'confirm' => __( 'Are you sure?', 'peanut-booker' ),
+                    'saving'  => __( 'Saving...', 'peanut-booker' ),
+                    'saved'   => __( 'Saved!', 'peanut-booker' ),
                 ),
             )
         );
+    }
+
+    /**
+     * Enqueue React app assets.
+     */
+    private function enqueue_react_assets() {
+        $dist_path = PEANUT_BOOKER_PATH . 'assets/dist/';
+        $dist_url  = PEANUT_BOOKER_URL . 'assets/dist/';
+
+        // Check for Vite manifest (production build).
+        $manifest_path = $dist_path . '.vite/manifest.json';
+
+        if ( file_exists( $manifest_path ) ) {
+            // Production: Load from built assets.
+            $manifest = json_decode( file_get_contents( $manifest_path ), true );
+
+            if ( isset( $manifest['src/main.tsx'] ) ) {
+                $entry = $manifest['src/main.tsx'];
+
+                // Enqueue CSS.
+                if ( isset( $entry['css'] ) ) {
+                    foreach ( $entry['css'] as $index => $css_file ) {
+                        wp_enqueue_style(
+                            'peanut-booker-react-' . $index,
+                            $dist_url . $css_file,
+                            array(),
+                            $this->version
+                        );
+                    }
+                }
+
+                // Enqueue JS as module.
+                wp_enqueue_script(
+                    'peanut-booker-react',
+                    $dist_url . $entry['file'],
+                    array(),
+                    $this->version,
+                    true
+                );
+                add_filter( 'script_loader_tag', array( $this, 'add_module_type' ), 10, 2 );
+            }
+
+            // Pass config to React app.
+            wp_localize_script(
+                'peanut-booker-react',
+                'peanutBooker',
+                $this->get_react_config()
+            );
+        } else {
+            // Development: Load from Vite dev server.
+            // Add module type filter for Vite scripts.
+            add_filter( 'script_loader_tag', array( $this, 'add_module_type' ), 10, 2 );
+
+            wp_enqueue_script(
+                'peanut-booker-vite-client',
+                'http://localhost:3001/@vite/client',
+                array(),
+                null,
+                true
+            );
+
+            wp_enqueue_script(
+                'peanut-booker-react',
+                'http://localhost:3001/src/main.tsx',
+                array( 'peanut-booker-vite-client' ),
+                null,
+                true
+            );
+
+            // Pass config before Vite scripts.
+            wp_add_inline_script(
+                'peanut-booker-vite-client',
+                'window.peanutBooker = ' . wp_json_encode( $this->get_react_config() ) . ';',
+                'before'
+            );
+        }
+    }
+
+    /**
+     * Get React app configuration.
+     *
+     * @return array
+     */
+    private function get_react_config() {
+        return array(
+            'apiUrl'  => rest_url( 'peanut-booker/v1' ),
+            'nonce'   => wp_create_nonce( 'wp_rest' ),
+            'version' => $this->version,
+            'tier'    => $this->get_current_tier(),
+        );
+    }
+
+    /**
+     * Add type="module" to React script tags.
+     *
+     * @param string $tag    The script tag.
+     * @param string $handle The script handle.
+     * @return string
+     */
+    public function add_module_type( $tag, $handle ) {
+        if ( in_array( $handle, array( 'peanut-booker-react', 'peanut-booker-vite-client' ), true ) ) {
+            $tag = str_replace( ' src=', ' type="module" src=', $tag );
+        }
+        return $tag;
+    }
+
+    /**
+     * Get current subscription tier.
+     *
+     * @return string
+     */
+    private function get_current_tier() {
+        $license_status = get_option( 'peanut_booker_license_status', '' );
+        return 'valid' === $license_status ? 'pro' : 'free';
+    }
+
+    /**
+     * Render the React SPA container.
+     */
+    private function render_react_app() {
+        echo '<div id="peanut-booker-app" class="peanut-booker-wrap"></div>';
     }
 
     /**
@@ -167,6 +320,36 @@ class Peanut_Booker_Admin {
             array( $this, 'render_payouts_page' )
         );
 
+        // Messages.
+        add_submenu_page(
+            'peanut-booker',
+            __( 'Messages', 'peanut-booker' ),
+            __( 'Messages', 'peanut-booker' ),
+            'manage_options',
+            'pb-messages',
+            array( $this, 'render_messages_page' )
+        );
+
+        // Customers.
+        add_submenu_page(
+            'peanut-booker',
+            __( 'Customers', 'peanut-booker' ),
+            __( 'Customers', 'peanut-booker' ),
+            'manage_options',
+            'pb-customers',
+            array( $this, 'render_customers_page' )
+        );
+
+        // Analytics.
+        add_submenu_page(
+            'peanut-booker',
+            __( 'Analytics', 'peanut-booker' ),
+            __( 'Analytics', 'peanut-booker' ),
+            'manage_options',
+            'pb-analytics',
+            array( $this, 'render_analytics_page' )
+        );
+
         // Settings.
         add_submenu_page(
             'peanut-booker',
@@ -192,9 +375,8 @@ class Peanut_Booker_Admin {
         );
 
         // Hidden performer editor page (no menu item).
-        // Use empty string instead of null for PHP 8.x compatibility.
         add_submenu_page(
-            '', // Hidden from menu
+            null, // No parent - hidden from menu.
             __( 'Edit Performer', 'peanut-booker' ),
             __( 'Edit Performer', 'peanut-booker' ),
             'pb_manage_performers',
@@ -442,128 +624,84 @@ class Peanut_Booker_Admin {
      * Render dashboard page.
      */
     public function render_dashboard_page() {
-        global $wpdb;
-
-        // Get stats.
-        $total_performers = Peanut_Booker_Database::count( 'performers' );
-        $pro_performers   = Peanut_Booker_Database::count( 'performers', array( 'tier' => 'pro' ) );
-        $total_bookings   = Peanut_Booker_Database::count( 'bookings' );
-        $pending_bookings = Peanut_Booker_Database::count( 'bookings', array( 'booking_status' => 'pending' ) );
-
-        $bookings_table = $wpdb->prefix . 'pb_bookings';
-        $total_revenue  = $wpdb->get_var( "SELECT SUM(total_amount) FROM $bookings_table WHERE booking_status = 'completed'" );
-        $commission     = $wpdb->get_var( "SELECT SUM(platform_commission) FROM $bookings_table WHERE booking_status = 'completed'" );
-
-        $pending_reviews = count( Peanut_Booker_Reviews::get_pending_arbitration() );
-
-        include PEANUT_BOOKER_PATH . 'admin/partials/dashboard.php';
+        $this->render_react_app();
     }
 
     /**
      * Render performers page.
      */
     public function render_performers_page() {
-        $performers = Peanut_Booker_Database::get_results( 'performers', array(), 'created_at', 'DESC', 50 );
-        include PEANUT_BOOKER_PATH . 'admin/partials/performers.php';
+        $this->render_react_app();
     }
 
     /**
      * Render bookings page.
      */
     public function render_bookings_page() {
-        $status   = isset( $_GET['status'] ) ? sanitize_text_field( $_GET['status'] ) : '';
-        $where    = $status ? array( 'booking_status' => $status ) : array();
-        $bookings = Peanut_Booker_Database::get_results( 'bookings', $where, 'created_at', 'DESC', 50 );
-        include PEANUT_BOOKER_PATH . 'admin/partials/bookings.php';
+        $this->render_react_app();
     }
 
     /**
      * Render market page.
      */
     public function render_market_page() {
-        $events = Peanut_Booker_Database::get_results( 'events', array(), 'created_at', 'DESC', 50 );
-        include PEANUT_BOOKER_PATH . 'admin/partials/market.php';
+        $this->render_react_app();
     }
 
     /**
      * Render reviews page.
      */
     public function render_reviews_page() {
-        $tab = isset( $_GET['tab'] ) ? sanitize_text_field( $_GET['tab'] ) : 'all';
-
-        if ( 'flagged' === $tab ) {
-            $reviews = Peanut_Booker_Reviews::get_pending_arbitration();
-        } else {
-            $reviews = Peanut_Booker_Database::get_results( 'reviews', array(), 'created_at', 'DESC', 50 );
-            $reviews = array_map( array( 'Peanut_Booker_Reviews', 'format_review_data' ), $reviews );
-        }
-
-        include PEANUT_BOOKER_PATH . 'admin/partials/reviews.php';
+        $this->render_react_app();
     }
 
     /**
      * Render payouts page.
      */
     public function render_payouts_page() {
-        global $wpdb;
-
-        $table = $wpdb->prefix . 'pb_bookings';
-
-        // Get bookings ready for payout.
-        $pending_payouts = $wpdb->get_results(
-            "SELECT * FROM $table
-            WHERE booking_status = 'completed'
-            AND escrow_status IN ('deposit_held', 'full_held')
-            ORDER BY completion_date ASC"
-        );
-
-        include PEANUT_BOOKER_PATH . 'admin/partials/payouts.php';
+        $this->render_react_app();
     }
 
     /**
      * Render settings page.
      */
     public function render_settings_page() {
-        $active_tab = isset( $_GET['tab'] ) ? sanitize_text_field( $_GET['tab'] ) : 'general';
-        include PEANUT_BOOKER_PATH . 'admin/partials/settings.php';
+        $this->render_react_app();
     }
 
     /**
      * Render demo mode page.
      */
     public function render_demo_page() {
-        // Handle form submission.
-        if ( isset( $_POST['pb_demo_action'] ) && isset( $_POST['pb_demo_nonce'] ) ) {
-            if ( wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['pb_demo_nonce'] ) ), 'pb_demo_mode' ) ) {
-                $action = sanitize_text_field( wp_unslash( $_POST['pb_demo_action'] ) );
+        $this->render_react_app();
+    }
 
-                if ( 'enable' === $action ) {
-                    $results = Peanut_Booker_Demo_Data::enable_demo_mode();
+    /**
+     * Render microsites page.
+     */
+    public function render_microsites_page() {
+        $this->render_react_app();
+    }
 
-                    if ( isset( $results['error'] ) ) {
-                        add_settings_error( 'pb_demo', 'demo_error', $results['error'], 'error' );
-                    } else {
-                        $message = sprintf(
-                            /* translators: counts of created items */
-                            __( 'Demo mode enabled! Created: %d performers, %d customers, %d bookings, %d reviews, %d market events, %d bids.', 'peanut-booker' ),
-                            $results['performers'],
-                            $results['customers'],
-                            $results['bookings'],
-                            $results['reviews'],
-                            $results['events'],
-                            $results['bids']
-                        );
-                        add_settings_error( 'pb_demo', 'demo_success', $message, 'success' );
-                    }
-                } elseif ( 'disable' === $action && isset( $_POST['confirm_disable'] ) ) {
-                    Peanut_Booker_Demo_Data::disable_demo_mode();
-                    add_settings_error( 'pb_demo', 'demo_disabled', __( 'Demo mode disabled. All demo data has been removed.', 'peanut-booker' ), 'success' );
-                }
-            }
-        }
+    /**
+     * Render messages page.
+     */
+    public function render_messages_page() {
+        $this->render_react_app();
+    }
 
-        settings_errors( 'pb_demo' );
-        include PEANUT_BOOKER_PATH . 'admin/partials/demo-mode.php';
+    /**
+     * Render customers page.
+     */
+    public function render_customers_page() {
+        $this->render_react_app();
+    }
+
+    /**
+     * Render analytics page.
+     */
+    public function render_analytics_page() {
+        $this->render_react_app();
     }
 
     /**
@@ -876,10 +1014,18 @@ class Peanut_Booker_Admin {
      * Render the clean performer editor page.
      */
     public function render_performer_editor() {
-        // Enqueue media uploader.
+        // Enqueue media uploader for image uploads.
         wp_enqueue_media();
 
-        require_once PEANUT_BOOKER_PATH . 'admin/partials/performer-editor.php';
+        // Add performer ID to config for the editor.
+        $performer_id = isset( $_GET['performer_id'] ) ? absint( $_GET['performer_id'] ) : 0;
+        wp_add_inline_script(
+            'peanut-booker-react',
+            'window.peanutBookerPerformerId = ' . $performer_id . ';',
+            'before'
+        );
+
+        $this->render_react_app();
     }
 
     /**

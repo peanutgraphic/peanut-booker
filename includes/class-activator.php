@@ -101,7 +101,7 @@ class Peanut_Booker_Activator {
             event_address text,
             event_city varchar(100) DEFAULT NULL,
             event_state varchar(100) DEFAULT NULL,
-            event_zip varchar(20) DEFAULT NULL,
+            event_zip varchar(255) DEFAULT NULL,
             total_amount decimal(10,2) NOT NULL,
             deposit_amount decimal(10,2) NOT NULL,
             remaining_amount decimal(10,2) NOT NULL,
@@ -301,6 +301,25 @@ class Peanut_Booker_Activator {
         ) $charset_collate;";
         dbDelta( $sql_subscriptions );
 
+        // Messages table.
+        $table_messages = $wpdb->prefix . 'pb_messages';
+        $sql_messages   = "CREATE TABLE $table_messages (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            sender_id bigint(20) unsigned NOT NULL,
+            recipient_id bigint(20) unsigned NOT NULL,
+            message text NOT NULL,
+            booking_id bigint(20) unsigned DEFAULT NULL,
+            is_read tinyint(1) NOT NULL DEFAULT 0,
+            created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY  (id),
+            KEY sender_id (sender_id),
+            KEY recipient_id (recipient_id),
+            KEY booking_id (booking_id),
+            KEY created_at (created_at),
+            KEY conversation (sender_id, recipient_id, created_at)
+        ) $charset_collate;";
+        dbDelta( $sql_messages );
+
         // Sponsored slots table.
         $table_sponsored = $wpdb->prefix . 'pb_sponsored_slots';
         $sql_sponsored   = "CREATE TABLE $table_sponsored (
@@ -325,6 +344,32 @@ class Peanut_Booker_Activator {
             KEY end_date (end_date)
         ) $charset_collate;";
         dbDelta( $sql_sponsored );
+
+        // Microsites table.
+        $table_microsites = $wpdb->prefix . 'pb_microsites';
+        $sql_microsites   = "CREATE TABLE $table_microsites (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            performer_id bigint(20) unsigned NOT NULL,
+            user_id bigint(20) unsigned NOT NULL,
+            subscription_id bigint(20) unsigned DEFAULT NULL,
+            status varchar(20) NOT NULL DEFAULT 'pending',
+            slug varchar(100) NOT NULL,
+            custom_domain varchar(255) DEFAULT NULL,
+            domain_verified tinyint(1) NOT NULL DEFAULT 0,
+            has_custom_domain_addon tinyint(1) NOT NULL DEFAULT 0,
+            design_settings text,
+            meta_title varchar(255) DEFAULT NULL,
+            meta_description text,
+            view_count int(11) NOT NULL DEFAULT 0,
+            created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY  (id),
+            UNIQUE KEY slug (slug),
+            KEY performer_id (performer_id),
+            KEY user_id (user_id),
+            KEY status (status)
+        ) $charset_collate;";
+        dbDelta( $sql_microsites );
     }
 
     /**

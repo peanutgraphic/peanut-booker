@@ -700,6 +700,7 @@ class Peanut_Booker_Demo_Data {
             'bids'         => 0,
             'transactions' => 0,
             'availability' => 0,
+            'microsites'   => 0,
         );
 
         // Create categories first.
@@ -708,6 +709,9 @@ class Peanut_Booker_Demo_Data {
         // Create performers.
         $performer_ids = self::create_demo_performers();
         $results['performers'] = count( $performer_ids );
+
+        // Create microsites for performers.
+        $results['microsites'] = self::create_demo_microsites( $performer_ids );
 
         // Create customers.
         $customer_ids = self::create_demo_customers();
@@ -806,10 +810,27 @@ class Peanut_Booker_Demo_Data {
                     )
                 );
 
-                // Delete transactions.
+                // Delete transactions (via booking_id).
+                $booking_ids = $wpdb->get_col(
+                    $wpdb->prepare(
+                        "SELECT id FROM {$wpdb->prefix}pb_bookings WHERE performer_id IN ($perf_id_placeholders)",
+                        $performer_table_ids
+                    )
+                );
+                if ( ! empty( $booking_ids ) ) {
+                    $booking_placeholders = implode( ',', array_fill( 0, count( $booking_ids ), '%d' ) );
+                    $wpdb->query(
+                        $wpdb->prepare(
+                            "DELETE FROM {$wpdb->prefix}pb_transactions WHERE booking_id IN ($booking_placeholders)",
+                            $booking_ids
+                        )
+                    );
+                }
+
+                // Delete microsites.
                 $wpdb->query(
                     $wpdb->prepare(
-                        "DELETE FROM {$wpdb->prefix}pb_transactions WHERE performer_id IN ($perf_id_placeholders)",
+                        "DELETE FROM {$wpdb->prefix}pb_microsites WHERE performer_id IN ($perf_id_placeholders)",
                         $performer_table_ids
                     )
                 );
@@ -1072,12 +1093,96 @@ class Peanut_Booker_Demo_Data {
                     'performer_id' => $performer_id,
                     'date'         => $date,
                     'slot_type'    => 'full_day',
-                    'is_available' => $is_available ? 1 : 0,
+                    'status'       => $is_available ? 'available' : 'blocked',
                     'created_at'   => current_time( 'mysql' ),
                 ),
-                array( '%d', '%s', '%s', '%d', '%s' )
+                array( '%d', '%s', '%s', '%s', '%s' )
             );
         }
+    }
+
+    /**
+     * Create demo microsites for performers.
+     *
+     * @param array $performer_user_ids Performer user IDs.
+     * @return int Number of microsites created.
+     */
+    private static function create_demo_microsites( $performer_user_ids ) {
+        global $wpdb;
+
+        $count = 0;
+        $templates = array( 'classic', 'modern', 'bold', 'minimal' );
+        $colors = array( '#3b82f6', '#ef4444', '#10b981', '#8b5cf6', '#f59e0b', '#ec4899' );
+
+        foreach ( $performer_user_ids as $user_id ) {
+            // Get performer record using $wpdb directly.
+            $performer = $wpdb->get_row(
+                $wpdb->prepare(
+                    "SELECT * FROM {$wpdb->prefix}pb_performers WHERE user_id = %d",
+                    $user_id
+                )
+            );
+            if ( ! $performer ) {
+                continue;
+            }
+
+            // Get performer name for slug.
+            $performer_name = '';
+            if ( $performer->profile_id ) {
+                $performer_name = get_post_meta( $performer->profile_id, '_pb_stage_name', true );
+                if ( empty( $performer_name ) ) {
+                    $performer_name = get_the_title( $performer->profile_id );
+                }
+            }
+
+            if ( empty( $performer_name ) ) {
+                $user = get_user_by( 'id', $user_id );
+                $performer_name = $user ? $user->display_name : 'performer-' . $performer->id;
+            }
+
+            // Create URL-friendly slug.
+            $slug = sanitize_title( $performer_name );
+
+            // Make slug unique if needed.
+            $base_slug = $slug;
+            $counter = 1;
+            while ( $wpdb->get_var( $wpdb->prepare( "SELECT id FROM {$wpdb->prefix}pb_microsites WHERE slug = %s", $slug ) ) ) {
+                $slug = $base_slug . '-' . $counter;
+                $counter++;
+            }
+
+            // Create microsite with random template and color.
+            $design_settings = array(
+                'template'            => $templates[ array_rand( $templates ) ],
+                'primary_color'       => $colors[ array_rand( $colors ) ],
+                'secondary_color'     => '#1e40af',
+                'background_color'    => '#ffffff',
+                'text_color'          => '#1e293b',
+                'font_family'         => 'Inter',
+                'show_reviews'        => true,
+                'show_calendar'       => true,
+                'show_booking_button' => true,
+            );
+
+            $wpdb->insert(
+                $wpdb->prefix . 'pb_microsites',
+                array(
+                    'performer_id'     => $performer->id,
+                    'user_id'          => $user_id,
+                    'status'           => 'active',
+                    'slug'             => $slug,
+                    'design_settings'  => wp_json_encode( $design_settings ),
+                    'meta_title'       => $performer_name . ' - Book Now',
+                    'meta_description' => 'Book ' . $performer_name . ' for your next event. View availability, read reviews, and book directly.',
+                    'view_count'       => wp_rand( 50, 500 ),
+                    'created_at'       => current_time( 'mysql' ),
+                )
+            );
+
+            $count++;
+        }
+
+        return $count;
     }
 
     /**
@@ -1689,6 +1794,7 @@ class Peanut_Booker_Demo_Data {
             'events'       => (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}pb_events" ),
             'bids'         => (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}pb_bids" ),
             'transactions' => (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}pb_transactions" ),
+            'microsites'   => (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}pb_microsites" ),
         );
     }
 }

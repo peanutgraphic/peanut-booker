@@ -168,3 +168,84 @@ if ( ! defined( 'WPINC' ) ) {
         </p>
     </div>
 </div>
+
+<style>
+.pb-auto-release-eligible {
+    background: #fefce8;
+}
+.pb-auto-release-note {
+    color: #ca8a04;
+    font-weight: 600;
+}
+.pb-bulk-payout-actions {
+    display: flex;
+    gap: 10px;
+}
+</style>
+
+<script>
+jQuery(document).ready(function($) {
+    // Select all payouts.
+    $('#pb-select-all-payouts').on('change', function() {
+        $('.pb-payout-checkbox').prop('checked', $(this).prop('checked'));
+    });
+
+    // Bulk release selected.
+    $('.pb-bulk-release-selected').on('click', function() {
+        var selected = [];
+        $('.pb-payout-checkbox:checked').each(function() {
+            selected.push($(this).val());
+        });
+
+        if (selected.length === 0) {
+            alert('<?php esc_html_e( 'Please select at least one booking.', 'peanut-booker' ); ?>');
+            return;
+        }
+
+        if (!confirm('<?php esc_html_e( 'Release payouts for selected bookings?', 'peanut-booker' ); ?>')) {
+            return;
+        }
+
+        // Process bulk release via AJAX.
+        $.ajax({
+            url: pbAdmin.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'pb_admin_bulk_release_payouts',
+                booking_ids: selected,
+                nonce: pbAdmin.nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    location.reload();
+                } else {
+                    alert(response.data.message || '<?php esc_html_e( 'Error processing payouts.', 'peanut-booker' ); ?>');
+                }
+            }
+        });
+    });
+
+    // Bulk release eligible.
+    $('.pb-bulk-release-eligible').on('click', function() {
+        if (!confirm($(this).data('confirm'))) {
+            return;
+        }
+
+        $.ajax({
+            url: pbAdmin.ajaxUrl,
+            type: 'POST',
+            data: {
+                action: 'pb_admin_release_eligible_payouts',
+                nonce: pbAdmin.nonce
+            },
+            success: function(response) {
+                if (response.success) {
+                    location.reload();
+                } else {
+                    alert(response.data.message || '<?php esc_html_e( 'Error processing payouts.', 'peanut-booker' ); ?>');
+                }
+            }
+        });
+    });
+});
+</script>

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.0/phpunit.xsd"
+    bootstrap="tests/phpunit/bootstrap.php"
+    colors="true"
+    beStrictAboutTestsThatDoNotTestAnything="true"
+    beStrictAboutOutputDuringTests="true"
+    cacheDirectory=".phpunit.cache"
+    executionOrder="depends,defects"
+    requireCoverageMetadata="false"
+    failOnRisky="true"
+    failOnWarning="true"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory suffix="Test.php">tests/phpunit/unit</directory>
+        </testsuite>
+    </testsuites>
+
+    <coverage>
+        <include>
+            <directory suffix=".php">includes</directory>
+        </include>
+        <exclude>
+            <directory suffix=".php">includes/admin</directory>
+            <file>includes/class-activator.php</file>
+            <file>includes/class-deactivator.php</file>
+        </exclude>
+        <report>
+            <html outputDirectory="tests/coverage/html"/>
+            <text outputFile="tests/coverage/coverage.txt"/>
+            <clover outputFile="tests/coverage/clover.xml"/>
+        </report>
+    </coverage>
+
+    <php>
+        <env name="WP_TESTS_PHPUNIT_POLYFILLS_PATH" value="vendor/yoast/phpunit-polyfills"/>
+    </php>
+</phpunit>

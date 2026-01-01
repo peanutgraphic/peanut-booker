@@ -182,3 +182,33 @@ if ( ! defined( 'WPINC' ) ) {
         </table>
     <?php endif; ?>
 </div>
+
+<style>
+.pb-detail-panel {
+    padding: 20px;
+    background: #f9fafb;
+}
+.pb-detail-panel h4 {
+    margin: 0 0 15px;
+    font-size: 14px;
+}
+.pb-inner-table {
+    width: 100%;
+    background: #fff;
+    border-collapse: collapse;
+}
+.pb-inner-table th,
+.pb-inner-table td {
+    padding: 8px 12px;
+    text-align: left;
+    border: 1px solid #e5e7eb;
+}
+.pb-inner-table th {
+    background: #f3f4f6;
+    font-size: 12px;
+}
+.pb-deadline-expired {
+    color: #dc2626;
+    font-weight: 600;
+}
+</style>

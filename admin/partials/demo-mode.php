@@ -86,7 +86,7 @@ $demo_ids     = get_option( 'peanut_booker_demo_data_ids', array() );
             <h3><?php esc_html_e( 'Demo Performer Accounts', 'peanut-booker' ); ?></h3>
             <p class="description"><?php esc_html_e( 'Use these accounts to test performer functionality:', 'peanut-booker' ); ?></p>
 
-            <table class="pb-admin-table widefat pb-table-narrow">
+            <table class="pb-admin-table widefat" style="max-width: 800px;">
                 <thead>
                     <tr>
                         <th><?php esc_html_e( 'Name', 'peanut-booker' ); ?></th>
@@ -126,10 +126,10 @@ $demo_ids     = get_option( 'peanut_booker_demo_data_ids', array() );
                 </tbody>
             </table>
 
-            <h3><?php esc_html_e( 'Demo Customer Accounts', 'peanut-booker' ); ?></h3>
+            <h3 style="margin-top: 30px;"><?php esc_html_e( 'Demo Customer Accounts', 'peanut-booker' ); ?></h3>
             <p class="description"><?php esc_html_e( 'Use these accounts to test customer functionality:', 'peanut-booker' ); ?></p>
 
-            <table class="pb-admin-table widefat pb-table-narrow pb-table-small">
+            <table class="pb-admin-table widefat" style="max-width: 500px;">
                 <thead>
                     <tr>
                         <th><?php esc_html_e( 'Name', 'peanut-booker' ); ?></th>
@@ -152,7 +152,7 @@ $demo_ids     = get_option( 'peanut_booker_demo_data_ids', array() );
                 </tbody>
             </table>
 
-            <div class="pb-demo-note pb-note-warning">
+            <div class="pb-demo-note" style="margin-top: 30px; padding: 15px; background: #fef3c7; border-radius: 8px;">
                 <strong><?php esc_html_e( 'Note:', 'peanut-booker' ); ?></strong>
                 <?php esc_html_e( 'Demo accounts use @demo.peanutbooker.test email addresses which are not real. To log in as a demo user, use the "Switch User" functionality or reset their password from the Users screen.', 'peanut-booker' ); ?>
             </div>
@@ -161,7 +161,7 @@ $demo_ids     = get_option( 'peanut_booker_demo_data_ids', array() );
         <div class="pb-demo-actions pb-settings-section">
             <h2><?php esc_html_e( 'Quick Links for Testing', 'peanut-booker' ); ?></h2>
 
-            <div class="pb-quick-actions">
+            <div class="pb-quick-actions" style="flex-wrap: wrap;">
                 <?php
                 $directory_page = get_option( 'pb_performer_directory_page' );
                 $market_page    = get_option( 'pb_market_page' );
@@ -228,7 +228,7 @@ $demo_ids     = get_option( 'peanut_booker_demo_data_ids', array() );
                     </label>
                 </p>
 
-                <button type="submit" class="button button-secondary pb-button-danger">
+                <button type="submit" class="button button-secondary" style="color: #dc2626; border-color: #dc2626;">
                     <?php esc_html_e( 'Disable Demo Mode & Delete Data', 'peanut-booker' ); ?>
                 </button>
             </form>
@@ -273,7 +273,7 @@ $demo_ids     = get_option( 'peanut_booker_demo_data_ids', array() );
                 </ul>
             </div>
 
-            <div class="pb-demo-note pb-note-info">
+            <div class="pb-demo-note" style="margin: 20px 0; padding: 15px; background: #dbeafe; border-radius: 8px;">
                 <strong><?php esc_html_e( 'Safe to Use:', 'peanut-booker' ); ?></strong>
                 <?php esc_html_e( 'Demo data is clearly marked and can be completely removed at any time. It will not interfere with real user data.', 'peanut-booker' ); ?>
             </div>
@@ -282,8 +282,8 @@ $demo_ids     = get_option( 'peanut_booker_demo_data_ids', array() );
                 <?php wp_nonce_field( 'pb_demo_mode', 'pb_demo_nonce' ); ?>
                 <input type="hidden" name="pb_demo_action" value="enable">
 
-                <button type="submit" class="button button-primary button-hero pb-hero-button">
-                    <span class="dashicons dashicons-database-add"></span>
+                <button type="submit" class="button button-primary button-hero">
+                    <span class="dashicons dashicons-database-add" style="margin-right: 5px;"></span>
                     <?php esc_html_e( 'Enable Demo Mode & Generate Test Data', 'peanut-booker' ); ?>
                 </button>
             </form>
@@ -291,3 +291,75 @@ $demo_ids     = get_option( 'peanut_booker_demo_data_ids', array() );
 
     <?php endif; ?>
 </div>
+
+<style>
+.pb-demo-status {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 25px;
+    border-radius: 12px;
+    margin-bottom: 30px;
+}
+.pb-demo-active {
+    background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
+    border: 2px solid #22c55e;
+}
+.pb-demo-inactive {
+    background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+    border: 2px solid #9ca3af;
+}
+.pb-demo-status-icon .dashicons {
+    font-size: 48px;
+    width: 48px;
+    height: 48px;
+}
+.pb-demo-active .pb-demo-status-icon .dashicons {
+    color: #22c55e;
+}
+.pb-demo-inactive .pb-demo-status-icon .dashicons {
+    color: #9ca3af;
+}
+.pb-demo-status-text h2 {
+    margin: 0 0 5px;
+}
+.pb-demo-status-text p {
+    margin: 0;
+    color: #4b5563;
+}
+.pb-demo-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 20px;
+    margin: 20px 0;
+}
+.pb-demo-stat {
+    text-align: center;
+    padding: 20px;
+    background: #f9fafb;
+    border-radius: 8px;
+}
+.pb-demo-stat-number {
+    display: block;
+    font-size: 32px;
+    font-weight: 700;
+    color: #6366f1;
+}
+.pb-demo-stat-label {
+    display: block;
+    font-size: 13px;
+    color: #6b7280;
+    margin-top: 5px;
+}
+.pb-demo-features ul {
+    list-style: none;
+    padding: 0;
+}
+.pb-demo-features li {
+    padding: 10px 0;
+    border-bottom: 1px solid #e5e7eb;
+}
+.pb-demo-features li:last-child {
+    border-bottom: none;
+}
+</style>

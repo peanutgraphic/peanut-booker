@@ -176,3 +176,22 @@ $current_status = isset( $_GET['status'] ) ? sanitize_text_field( $_GET['status'
         </table>
     <?php endif; ?>
 </div>
+
+<style>
+.pb-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    padding: 20px;
+    background: #f9fafb;
+}
+.pb-detail-grid h4 {
+    margin: 0 0 10px;
+    font-size: 13px;
+    text-transform: uppercase;
+    color: #6b7280;
+}
+.pb-booking-details td {
+    background: #f9fafb;
+}
+</style>

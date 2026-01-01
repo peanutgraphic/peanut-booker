@@ -3,7 +3,7 @@
  * Plugin Name: Peanut Booker
  * Plugin URI: https://peanutgraphic.com/peanut-booker
  * Description: A membership and booking platform connecting performers with event organizers. Features performer profiles, booking engine, bidding market, reviews, and escrow payments.
- * Version: 1.5.4
+ * Version: 1.7.1
  * Author: Peanut Graphic
  * Author URI: https://peanutgraphic.com
  * License: GPL-2.0+
@@ -26,7 +26,7 @@ if ( ! defined( 'WPINC' ) ) {
 /**
  * Plugin version.
  */
-define( 'PEANUT_BOOKER_VERSION', '1.5.4' );
+define( 'PEANUT_BOOKER_VERSION', '1.7.1' );
 
 /**
  * Plugin base path.
@@ -154,19 +154,6 @@ function peanut_booker_run() {
         'status_option'  => 'peanut_booker_license_status',
         'auto_updates'   => true,
     ) );
-
-    // Schedule health reporting if licensed.
-    if ( $peanut_booker_license->is_active() ) {
-        $peanut_booker_license->schedule_health_report();
-    }
-
-    // Hook for daily health report cron.
-    add_action( 'peanut_license_health_report_peanut-booker', function() {
-        $license = peanut_booker_license();
-        if ( $license && $license->is_active() ) {
-            $license->report_health();
-        }
-    } );
 
     $plugin = new Peanut_Booker();
     $plugin->run();

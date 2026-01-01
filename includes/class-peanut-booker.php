@@ -67,6 +67,15 @@ class Peanut_Booker {
         // Database operations.
         require_once PEANUT_BOOKER_PATH . 'includes/class-database.php';
 
+        // Rate limiting for API protection.
+        require_once PEANUT_BOOKER_PATH . 'includes/class-rate-limiter.php';
+
+        // Audit logging for security and compliance.
+        require_once PEANUT_BOOKER_PATH . 'includes/class-audit-log.php';
+
+        // Data encryption for sensitive fields.
+        require_once PEANUT_BOOKER_PATH . 'includes/class-encryption.php';
+
         // User roles and capabilities.
         require_once PEANUT_BOOKER_PATH . 'includes/class-roles.php';
 
@@ -103,6 +112,9 @@ class Peanut_Booker {
         // REST API endpoints.
         require_once PEANUT_BOOKER_PATH . 'includes/class-rest-api.php';
 
+        // Admin REST API endpoints for React SPA.
+        require_once PEANUT_BOOKER_PATH . 'includes/class-rest-api-admin.php';
+
         // Peanut Suite integration.
         require_once PEANUT_BOOKER_PATH . 'includes/class-peanut-suite.php';
 
@@ -114,6 +126,12 @@ class Peanut_Booker {
 
         // Google OAuth authentication.
         require_once PEANUT_BOOKER_PATH . 'includes/class-google-auth.php';
+
+        // Booking wizard.
+        require_once PEANUT_BOOKER_PATH . 'includes/class-booking-wizard.php';
+
+        // Messaging system.
+        require_once PEANUT_BOOKER_PATH . 'includes/class-messages.php';
 
         // Admin class.
         require_once PEANUT_BOOKER_PATH . 'admin/class-admin.php';
@@ -216,6 +234,9 @@ class Peanut_Booker {
         // Initialize REST API.
         new Peanut_Booker_REST_API();
 
+        // Initialize Admin REST API for React SPA.
+        new Peanut_Booker_REST_API_Admin();
+
         // Initialize Peanut Suite integration.
         new Peanut_Booker_Peanut_Suite();
 
@@ -224,6 +245,18 @@ class Peanut_Booker {
 
         // Initialize Google OAuth.
         new Peanut_Booker_Google_Auth();
+
+        // Initialize booking wizard.
+        new Peanut_Booker_Booking_Wizard();
+
+        // Initialize messaging system.
+        new Peanut_Booker_Messages();
+
+        // Initialize performer functionality.
+        new Peanut_Booker_Performer();
+
+        // Initialize audit logging.
+        new Peanut_Booker_Audit_Log();
     }
 
     /**

@@ -216,3 +216,59 @@ $current_tab = isset( $_GET['tab'] ) ? sanitize_text_field( $_GET['tab'] ) : 'al
 
     <?php endif; ?>
 </div>
+
+<style>
+.pb-badge {
+    display: inline-block;
+    background: #dc2626;
+    color: #fff;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 10px;
+    margin-left: 5px;
+}
+.pb-review-item {
+    margin-bottom: 20px;
+}
+.pb-review-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 15px;
+}
+.pb-review-rating {
+    font-size: 18px;
+    color: #f59e0b;
+}
+.pb-flag-reason {
+    background: #fef3c7;
+    padding: 12px;
+    border-radius: 6px;
+    margin: 15px 0;
+}
+.pb-flag-reason strong {
+    color: #92400e;
+}
+.pb-form-row {
+    margin-bottom: 12px;
+}
+.pb-form-row label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+}
+.pb-form-row select,
+.pb-form-row textarea {
+    width: 100%;
+    max-width: 400px;
+}
+.pb-star-display {
+    color: #f59e0b;
+    font-weight: 600;
+}
+.pb-review-response-display {
+    background: #f3f4f6;
+    padding: 12px;
+    border-radius: 6px;
+    margin-top: 10px;
+}
+</style>

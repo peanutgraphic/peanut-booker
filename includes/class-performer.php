@@ -22,6 +22,7 @@ class Peanut_Booker_Performer {
         add_action( 'user_register', array( $this, 'maybe_create_performer_record' ) );
         add_action( 'save_post_pb_performer', array( $this, 'sync_performer_data' ), 10, 3 );
         add_action( 'wp_ajax_pb_update_performer_profile', array( $this, 'ajax_update_profile' ) );
+        add_action( 'wp_ajax_pb_toggle_instant_booking', array( $this, 'ajax_toggle_instant_booking' ) );
         add_filter( 'template_include', array( $this, 'load_performer_template' ) );
     }
 
@@ -750,5 +751,165 @@ class Peanut_Booker_Performer {
             $badge['icon'],
             esc_html( $badge['label'] )
         );
+    }
+
+    /**
+     * Check if performer has instant booking enabled.
+     *
+     * @param int $performer_id Performer ID.
+     * @return bool
+     */
+    public static function has_instant_booking( $performer_id ) {
+        $performer = self::get( $performer_id );
+        if ( ! $performer ) {
+            return false;
+        }
+
+        return (bool) get_post_meta( $performer->profile_id, 'pb_instant_booking_enabled', true );
+    }
+
+    /**
+     * Toggle instant booking for performer.
+     *
+     * @param int  $performer_id Performer ID.
+     * @param bool $enabled      Enable or disable.
+     * @return bool Success.
+     */
+    public static function set_instant_booking( $performer_id, $enabled ) {
+        $performer = self::get( $performer_id );
+        if ( ! $performer ) {
+            return false;
+        }
+
+        return update_post_meta( $performer->profile_id, 'pb_instant_booking_enabled', (bool) $enabled );
+    }
+
+    /**
+     * AJAX handler for toggling instant booking.
+     */
+    public function ajax_toggle_instant_booking() {
+        check_ajax_referer( 'pb_performer_nonce', 'nonce' );
+
+        if ( ! is_user_logged_in() ) {
+            wp_send_json_error( array( 'message' => __( 'You must be logged in.', 'peanut-booker' ) ) );
+        }
+
+        $user_id   = get_current_user_id();
+        $performer = self::get_by_user_id( $user_id );
+
+        if ( ! $performer ) {
+            wp_send_json_error( array( 'message' => __( 'Performer not found.', 'peanut-booker' ) ) );
+        }
+
+        $enabled = isset( $_POST['enabled'] ) && $_POST['enabled'] === 'true';
+        $result  = self::set_instant_booking( $performer->id, $enabled );
+
+        if ( $result ) {
+            wp_send_json_success(
+                array(
+                    'message' => $enabled
+                        ? __( 'Instant booking enabled.', 'peanut-booker' )
+                        : __( 'Instant booking disabled.', 'peanut-booker' ),
+                    'enabled' => $enabled,
+                )
+            );
+        } else {
+            wp_send_json_error( array( 'message' => __( 'Failed to update setting.', 'peanut-booker' ) ) );
+        }
+    }
+
+    /**
+     * Get performer metrics.
+     *
+     * @param int $performer_id Performer ID.
+     * @return array Metrics data.
+     */
+    public static function get_metrics( $performer_id ) {
+        global $wpdb;
+
+        $performer = self::get( $performer_id );
+        if ( ! $performer ) {
+            return array();
+        }
+
+        $bookings_table = $wpdb->prefix . 'pb_bookings';
+
+        // Calculate response time (average time from booking creation to performer confirmation).
+        $avg_response_time = $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT AVG(TIMESTAMPDIFF(HOUR, created_at, updated_at))
+                FROM $bookings_table
+                WHERE performer_id = %d
+                AND performer_confirmed = 1
+                AND created_at IS NOT NULL
+                AND updated_at IS NOT NULL",
+                $performer_id
+            )
+        );
+
+        // Calculate acceptance rate.
+        $total_bookings = $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COUNT(*) FROM $bookings_table WHERE performer_id = %d",
+                $performer_id
+            )
+        );
+
+        $confirmed_bookings = $wpdb->get_var(
+            $wpdb->prepare(
+                "SELECT COUNT(*) FROM $bookings_table
+                WHERE performer_id = %d
+                AND booking_status IN ('confirmed', 'completed')",
+                $performer_id
+            )
+        );
+
+        $acceptance_rate = $total_bookings > 0 ? ( $confirmed_bookings / $total_bookings ) * 100 : 0;
+
+        // Get response time stats from metadata.
+        $response_times = get_post_meta( $performer->profile_id, 'pb_response_times', true ) ?: array();
+        $first_response_avg = ! empty( $response_times ) ? array_sum( $response_times ) / count( $response_times ) : 0;
+
+        return array(
+            'response_time_hours'     => round( floatval( $avg_response_time ), 1 ),
+            'first_response_avg_hours' => round( $first_response_avg, 1 ),
+            'acceptance_rate'         => round( $acceptance_rate, 1 ),
+            'total_bookings'          => intval( $total_bookings ),
+            'confirmed_bookings'      => intval( $confirmed_bookings ),
+            'completed_bookings'      => $performer->completed_bookings,
+        );
+    }
+
+    /**
+     * Track response time for a booking.
+     *
+     * @param int $performer_id Performer ID.
+     * @param int $booking_id   Booking ID.
+     */
+    public static function track_response_time( $performer_id, $booking_id ) {
+        $booking = Peanut_Booker_Booking::get( $booking_id );
+        if ( ! $booking ) {
+            return;
+        }
+
+        $performer = self::get( $performer_id );
+        if ( ! $performer ) {
+            return;
+        }
+
+        // Calculate time difference in hours.
+        $created_time = strtotime( $booking->created_at );
+        $response_time = ( time() - $created_time ) / 3600;
+
+        // Store response time.
+        $response_times = get_post_meta( $performer->profile_id, 'pb_response_times', true ) ?: array();
+        $response_times[] = $response_time;
+
+        // Keep only last 50 response times.
+        if ( count( $response_times ) > 50 ) {
+            $response_times = array_slice( $response_times, -50 );
+        }
+
+        update_post_meta( $performer->profile_id, 'pb_response_times', $response_times );
     }
 }

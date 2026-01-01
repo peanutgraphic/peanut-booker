@@ -36,9 +36,23 @@ class Peanut_Booker_Roles {
      */
     private static $pro_performer_caps = array(
         'pb_bid_on_events',
+        'pb_extended_photos',
+        'pb_extended_videos',
+        'pb_advanced_analytics',
+    );
+
+    /**
+     * Featured performer additional capabilities (includes all Pro caps).
+     *
+     * @var array
+     */
+    private static $featured_performer_caps = array(
         'pb_unlimited_photos',
         'pb_unlimited_videos',
-        'pb_advanced_analytics',
+        'pb_featured_badge',
+        'pb_priority_support',
+        'pb_custom_domain',
+        'pb_homepage_spotlight',
     );
 
     /**
@@ -149,60 +163,106 @@ class Peanut_Booker_Roles {
     }
 
     /**
-     * Check if performer is Pro tier.
+     * Get performer's current tier.
      *
      * @param int $user_id Optional user ID.
-     * @return bool
+     * @return string Tier (free/pro/featured).
      */
-    public static function is_pro_performer( $user_id = null ) {
+    public static function get_performer_tier( $user_id = null ) {
         if ( null === $user_id ) {
             $user_id = get_current_user_id();
         }
 
         if ( ! self::is_performer( $user_id ) ) {
-            return false;
+            return 'free';
         }
 
         $performer = Peanut_Booker_Database::get_row( 'performers', array( 'user_id' => $user_id ) );
 
-        return $performer && 'pro' === $performer->tier;
+        return $performer ? ( $performer->tier ?? 'free' ) : 'free';
     }
 
     /**
-     * Grant Pro capabilities to a performer.
+     * Check if performer is Pro tier or higher.
      *
-     * @param int $user_id User ID.
+     * @param int $user_id Optional user ID.
+     * @return bool
      */
-    public static function grant_pro_capabilities( $user_id ) {
+    public static function is_pro_performer( $user_id = null ) {
+        $tier = self::get_performer_tier( $user_id );
+        return in_array( $tier, array( 'pro', 'featured' ), true );
+    }
+
+    /**
+     * Check if performer is Featured tier.
+     *
+     * @param int $user_id Optional user ID.
+     * @return bool
+     */
+    public static function is_featured_performer( $user_id = null ) {
+        return 'featured' === self::get_performer_tier( $user_id );
+    }
+
+    /**
+     * Grant tier capabilities to a performer.
+     *
+     * @param int    $user_id User ID.
+     * @param string $tier    Tier to grant (pro/featured).
+     */
+    public static function grant_tier_capabilities( $user_id, $tier = 'pro' ) {
         $user = get_userdata( $user_id );
         if ( ! $user || ! self::is_performer( $user_id ) ) {
             return;
         }
 
+        // Always grant Pro capabilities for Pro and Featured.
         foreach ( self::$pro_performer_caps as $cap ) {
             $user->add_cap( $cap );
+        }
+
+        // Grant Featured capabilities if Featured tier.
+        if ( 'featured' === $tier ) {
+            foreach ( self::$featured_performer_caps as $cap ) {
+                $user->add_cap( $cap );
+            }
         }
 
         // Update performer tier in database.
         Peanut_Booker_Database::update(
             'performers',
-            array( 'tier' => 'pro' ),
+            array( 'tier' => $tier ),
             array( 'user_id' => $user_id )
         );
     }
 
     /**
-     * Revoke Pro capabilities from a performer.
+     * Grant Pro capabilities to a performer.
+     *
+     * @deprecated Use grant_tier_capabilities() instead.
+     * @param int $user_id User ID.
+     */
+    public static function grant_pro_capabilities( $user_id ) {
+        self::grant_tier_capabilities( $user_id, 'pro' );
+    }
+
+    /**
+     * Revoke all tier capabilities from a performer.
      *
      * @param int $user_id User ID.
      */
-    public static function revoke_pro_capabilities( $user_id ) {
+    public static function revoke_tier_capabilities( $user_id ) {
         $user = get_userdata( $user_id );
         if ( ! $user ) {
             return;
         }
 
+        // Remove Pro capabilities.
         foreach ( self::$pro_performer_caps as $cap ) {
+            $user->remove_cap( $cap );
+        }
+
+        // Remove Featured capabilities.
+        foreach ( self::$featured_performer_caps as $cap ) {
             $user->remove_cap( $cap );
         }
 
@@ -212,6 +272,16 @@ class Peanut_Booker_Roles {
             array( 'tier' => 'free' ),
             array( 'user_id' => $user_id )
         );
+    }
+
+    /**
+     * Revoke Pro capabilities from a performer.
+     *
+     * @deprecated Use revoke_tier_capabilities() instead.
+     * @param int $user_id User ID.
+     */
+    public static function revoke_pro_capabilities( $user_id ) {
+        self::revoke_tier_capabilities( $user_id );
     }
 
     /**
@@ -246,42 +316,99 @@ class Peanut_Booker_Roles {
      * Get photo limit for user.
      *
      * Free tier: 1 photo
-     * Pro tier: 5 photos
+     * Pro tier: 10 photos
+     * Featured tier: Unlimited (-1)
      *
      * @param int $user_id Optional user ID.
-     * @return int Number of photos allowed.
+     * @return int Number of photos allowed (-1 for unlimited).
      */
     public static function get_photo_limit( $user_id = null ) {
-        return self::is_pro_performer( $user_id ) ? 5 : 1;
+        $tier = self::get_performer_tier( $user_id );
+
+        switch ( $tier ) {
+            case 'featured':
+                return -1; // Unlimited.
+            case 'pro':
+                return 10;
+            default:
+                return 1;
+        }
     }
 
     /**
      * Get video limit for user.
      *
-     * Free tier: 0 videos (videos are a Pro feature)
-     * Pro tier: 3 videos
+     * Free tier: 0 videos
+     * Pro tier: 5 videos
+     * Featured tier: Unlimited (-1)
      *
      * @param int $user_id Optional user ID.
-     * @return int Number of videos allowed.
+     * @return int Number of videos allowed (-1 for unlimited).
      */
     public static function get_video_limit( $user_id = null ) {
-        return self::is_pro_performer( $user_id ) ? 3 : 0;
+        $tier = self::get_performer_tier( $user_id );
+
+        switch ( $tier ) {
+            case 'featured':
+                return -1; // Unlimited.
+            case 'pro':
+                return 5;
+            default:
+                return 0;
+        }
+    }
+
+    /**
+     * Check if user has unlimited photos.
+     *
+     * @param int $user_id Optional user ID.
+     * @return bool
+     */
+    public static function has_unlimited_photos( $user_id = null ) {
+        return self::get_photo_limit( $user_id ) === -1;
+    }
+
+    /**
+     * Check if user has unlimited videos.
+     *
+     * @param int $user_id Optional user ID.
+     * @return bool
+     */
+    public static function has_unlimited_videos( $user_id = null ) {
+        return self::get_video_limit( $user_id ) === -1;
     }
 
     /**
      * Get commission rate for performer tier.
      *
-     * @param string $tier Performer tier (free/pro).
+     * Free tier: 20%
+     * Pro tier: 12%
+     * Featured tier: 8%
+     *
+     * @param string $tier Performer tier (free/pro/featured).
      * @return float Commission percentage.
      */
     public static function get_commission_rate( $tier = 'free' ) {
         $options = get_option( 'peanut_booker_settings', array() );
 
-        if ( 'pro' === $tier ) {
-            return isset( $options['commission_pro_tier'] ) ? floatval( $options['commission_pro_tier'] ) : 10;
+        switch ( $tier ) {
+            case 'featured':
+                return isset( $options['commission_featured_tier'] ) ? floatval( $options['commission_featured_tier'] ) : 8;
+            case 'pro':
+                return isset( $options['commission_pro_tier'] ) ? floatval( $options['commission_pro_tier'] ) : 12;
+            default:
+                return isset( $options['commission_free_tier'] ) ? floatval( $options['commission_free_tier'] ) : 20;
         }
+    }
 
-        return isset( $options['commission_free_tier'] ) ? floatval( $options['commission_free_tier'] ) : 15;
+    /**
+     * Get commission rate for a specific user.
+     *
+     * @param int $user_id Optional user ID.
+     * @return float Commission percentage.
+     */
+    public static function get_user_commission_rate( $user_id = null ) {
+        return self::get_commission_rate( self::get_performer_tier( $user_id ) );
     }
 
     /**

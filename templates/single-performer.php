@@ -390,6 +390,41 @@ while ( have_posts() ) :
     </article>
 
     <?php
+    // Analytics tracking script
+    $microsite = Peanut_Booker_Database::get_row( 'microsites', array( 'performer_id' => $performer_data->id ) );
+    if ( $microsite && $microsite->slug ) :
+    ?>
+    <script>
+    (function() {
+        var slug = <?php echo wp_json_encode( $microsite->slug ); ?>;
+        var apiUrl = <?php echo wp_json_encode( rest_url( 'peanut-booker/v1/microsites/' ) ); ?>;
+        var referrer = document.referrer || '';
+
+        // Track page view on load
+        function trackEvent(eventType) {
+            fetch(apiUrl + encodeURIComponent(slug) + '/track', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ event: eventType, referrer: referrer }),
+                credentials: 'omit'
+            }).catch(function() {});
+        }
+
+        // Track page view
+        trackEvent('page_view');
+
+        // Track booking button clicks
+        document.addEventListener('click', function(e) {
+            var target = e.target.closest('.pb-button-primary');
+            if (target && (target.textContent.indexOf('Book') !== -1 || target.href && target.href.indexOf('#pb-booking') !== -1)) {
+                trackEvent('booking_click');
+            }
+        });
+    })();
+    </script>
+    <?php endif; ?>
+
+    <?php
 endwhile;
 
 get_footer();

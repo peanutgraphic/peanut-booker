@@ -138,14 +138,14 @@ export default function Modal({
     <Fragment>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/50 z-[100] transition-opacity"
+        className="fixed inset-0 bg-black/50 z-[999998] transition-opacity"
         onClick={onClose}
         aria-hidden="true"
       />
 
       {/* Modal */}
       <div
-        className="fixed inset-0 z-[101] overflow-y-auto"
+        className="fixed inset-0 z-[999999] overflow-y-auto"
         role="presentation"
       >
         <div className="flex min-h-full items-center justify-center p-4">

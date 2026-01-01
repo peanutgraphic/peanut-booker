@@ -28,16 +28,56 @@ class Peanut_Booker_Encryption {
 	const ENCRYPTED_PREFIX = '$PB_ENC$';
 
 	/**
+	 * Flag to track if we've logged a warning about weak encryption keys.
+	 *
+	 * @var bool
+	 */
+	private static $weak_key_warning_logged = false;
+
+	/**
 	 * Get the encryption key derived from WordPress salts.
+	 *
+	 * SECURITY: Requires AUTH_KEY to be defined. If not defined, logs an error
+	 * and uses a site-specific fallback (not ideal, but better than hardcoded).
 	 *
 	 * @return string 32-byte key for AES-256.
 	 */
 	private static function get_key() {
-		// Use WordPress salts combined for key derivation.
-		$salt = defined( 'AUTH_KEY' ) ? AUTH_KEY : 'peanut-booker-default-key';
-		$salt .= defined( 'SECURE_AUTH_KEY' ) ? SECURE_AUTH_KEY : '';
+		// SECURITY: Check if AUTH_KEY is properly defined
+		if ( ! defined( 'AUTH_KEY' ) || AUTH_KEY === 'put your unique phrase here' || strlen( AUTH_KEY ) < 32 ) {
+			// Log warning (only once per request to avoid log spam)
+			if ( ! self::$weak_key_warning_logged ) {
+				self::$weak_key_warning_logged = true;
 
-		// Derive a 32-byte key using PBKDF2.
+				error_log( 'Peanut Booker SECURITY WARNING: AUTH_KEY is not properly configured. ' .
+					'Encryption is using a weak fallback key. Please configure WordPress security keys ' .
+					'in wp-config.php for proper data protection. Visit: https://api.wordpress.org/secret-key/1.1/salt/' );
+
+				// Trigger admin notice
+				add_action( 'admin_notices', function() {
+					if ( current_user_can( 'manage_options' ) ) {
+						echo '<div class="notice notice-error"><p>';
+						echo '<strong>Peanut Booker Security Warning:</strong> ';
+						echo 'WordPress AUTH_KEY is not properly configured. ';
+						echo 'Please add security keys to wp-config.php for proper data encryption. ';
+						echo '<a href="https://api.wordpress.org/secret-key/1.1/salt/" target="_blank">Generate keys here</a>.';
+						echo '</p></div>';
+					}
+				} );
+			}
+
+			// Use a site-specific fallback instead of a hardcoded key
+			// This is better than a static key but still not ideal
+			$site_url = get_site_url();
+			$db_prefix = $GLOBALS['wpdb']->prefix ?? 'wp_';
+			$salt = 'pb_fallback_' . md5( $site_url . $db_prefix . ABSPATH );
+		} else {
+			// Use WordPress salts combined for key derivation
+			$salt = AUTH_KEY;
+			$salt .= defined( 'SECURE_AUTH_KEY' ) ? SECURE_AUTH_KEY : '';
+		}
+
+		// Derive a 32-byte key using PBKDF2
 		return hash_pbkdf2( 'sha256', $salt, 'peanut-booker-encryption', 10000, 32, true );
 	}
 
@@ -64,7 +104,14 @@ class Peanut_Booker_Encryption {
 		$encrypted = openssl_encrypt( $value, self::CIPHER, $key, OPENSSL_RAW_DATA, $iv );
 
 		if ( false === $encrypted ) {
-			// Encryption failed, return original value.
+			// SECURITY: Log encryption failure - this could indicate a security issue
+			error_log( 'Peanut Booker SECURITY ERROR: Encryption failed. ' .
+				'Sensitive data may be stored in plaintext. OpenSSL error: ' . openssl_error_string() );
+
+			// Fire action for monitoring
+			do_action( 'peanut_booker_encryption_failed', 'encrypt', openssl_error_string() );
+
+			// Return original value (fallback, but not ideal)
 			return $value;
 		}
 
@@ -91,13 +138,20 @@ class Peanut_Booker_Encryption {
 		// Remove prefix.
 		$encoded = substr( $value, strlen( self::ENCRYPTED_PREFIX ) );
 
-		$data = base64_decode( $encoded );
+		$data = base64_decode( $encoded, true );
 		if ( false === $data ) {
+			error_log( 'Peanut Booker: Base64 decoding failed during decryption.' );
 			return $value;
 		}
 
 		$key = self::get_key();
 		$iv_length = openssl_cipher_iv_length( self::CIPHER );
+
+		// SECURITY: Validate data length before extracting IV
+		if ( strlen( $data ) <= $iv_length ) {
+			error_log( 'Peanut Booker SECURITY WARNING: Encrypted data too short - possible corruption or tampering.' );
+			return $value;
+		}
 
 		// Extract IV from beginning of data.
 		$iv = substr( $data, 0, $iv_length );
@@ -106,7 +160,14 @@ class Peanut_Booker_Encryption {
 		$decrypted = openssl_decrypt( $encrypted, self::CIPHER, $key, OPENSSL_RAW_DATA, $iv );
 
 		if ( false === $decrypted ) {
-			// Decryption failed, return original value.
+			// SECURITY: Log decryption failure - could indicate key mismatch or data corruption
+			error_log( 'Peanut Booker SECURITY WARNING: Decryption failed. ' .
+				'This could indicate key mismatch, data corruption, or tampering. ' .
+				'OpenSSL error: ' . openssl_error_string() );
+
+			// Fire action for monitoring
+			do_action( 'peanut_booker_encryption_failed', 'decrypt', openssl_error_string() );
+
 			return $value;
 		}
 

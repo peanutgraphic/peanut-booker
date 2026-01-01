@@ -814,6 +814,9 @@ class Peanut_Booker_Booking {
      * AJAX: Create booking.
      */
     public function ajax_create_booking() {
+        // Rate limiting: 10 booking attempts per minute
+        Peanut_Booker_Rate_Limiter::enforce_ajax( 'booking' );
+
         check_ajax_referer( 'pb_booking_nonce', 'nonce' );
 
         if ( ! is_user_logged_in() ) {
@@ -881,6 +884,9 @@ class Peanut_Booker_Booking {
      * AJAX: Confirm booking (performer).
      */
     public function ajax_confirm_booking() {
+        // Rate limiting: 10 booking actions per minute
+        Peanut_Booker_Rate_Limiter::enforce_ajax( 'booking' );
+
         check_ajax_referer( 'pb_booking_nonce', 'nonce' );
 
         if ( ! is_user_logged_in() ) {
@@ -901,6 +907,9 @@ class Peanut_Booker_Booking {
      * AJAX: Complete booking (customer).
      */
     public function ajax_complete_booking() {
+        // Rate limiting: 10 booking actions per minute
+        Peanut_Booker_Rate_Limiter::enforce_ajax( 'booking' );
+
         check_ajax_referer( 'pb_booking_nonce', 'nonce' );
 
         if ( ! is_user_logged_in() ) {
@@ -921,6 +930,9 @@ class Peanut_Booker_Booking {
      * AJAX: Cancel booking.
      */
     public function ajax_cancel_booking() {
+        // Rate limiting: 10 booking actions per minute
+        Peanut_Booker_Rate_Limiter::enforce_ajax( 'booking' );
+
         check_ajax_referer( 'pb_booking_nonce', 'nonce' );
 
         if ( ! is_user_logged_in() ) {

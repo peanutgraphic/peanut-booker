@@ -107,18 +107,84 @@ class Peanut_Booker_WooCommerce {
             return;
         }
 
+        // SECURITY: Verify nonce to prevent CSRF attacks.
+        if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( sanitize_key( $_GET['_wpnonce'] ), 'pb_checkout_booking' ) ) {
+            wc_add_notice( __( 'Security verification failed. Please try again.', 'peanut-booker' ), 'error' );
+            return;
+        }
+
+        // SECURITY: Require user to be logged in.
+        if ( ! is_user_logged_in() ) {
+            wc_add_notice( __( 'You must be logged in to checkout.', 'peanut-booker' ), 'error' );
+            wp_safe_redirect( wp_login_url( add_query_arg( array() ) ) );
+            exit;
+        }
+
         $booking_id = absint( $_GET['pb_booking'] );
-        $booking    = Peanut_Booker_Booking::get( $booking_id );
+
+        // SECURITY: Validate booking ID is a positive integer.
+        if ( $booking_id <= 0 ) {
+            wc_add_notice( __( 'Invalid booking ID.', 'peanut-booker' ), 'error' );
+            return;
+        }
+
+        $booking = Peanut_Booker_Booking::get( $booking_id );
 
         if ( ! $booking ) {
             wc_add_notice( __( 'Invalid booking.', 'peanut-booker' ), 'error' );
             return;
         }
 
-        // Verify customer.
+        // SECURITY: Verify customer owns this booking.
         if ( (int) $booking->customer_id !== get_current_user_id() ) {
+            // Log potential unauthorized access attempt.
+            error_log( sprintf(
+                'Peanut Booker SECURITY: Unauthorized checkout attempt. Booking ID: %d, Owner: %d, Attempted by: %d, IP: %s',
+                $booking_id,
+                $booking->customer_id,
+                get_current_user_id(),
+                sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ?? 'unknown' ) )
+            ) );
             wc_add_notice( __( 'Not authorized.', 'peanut-booker' ), 'error' );
             return;
+        }
+
+        // SECURITY: Verify booking is in a valid status for checkout.
+        $valid_checkout_statuses = array(
+            Peanut_Booker_Booking::STATUS_PENDING,
+            Peanut_Booker_Booking::STATUS_CONFIRMED,
+        );
+        if ( ! in_array( $booking->status, $valid_checkout_statuses, true ) ) {
+            wc_add_notice(
+                sprintf(
+                    /* translators: %s: booking status */
+                    __( 'This booking cannot be checked out. Current status: %s', 'peanut-booker' ),
+                    esc_html( $booking->status )
+                ),
+                'error'
+            );
+            return;
+        }
+
+        // SECURITY: Determine if this is a deposit or remaining balance payment.
+        $is_remaining_payment = isset( $_GET['payment'] ) && 'remaining' === $_GET['payment'];
+
+        if ( $is_remaining_payment ) {
+            // Paying remaining balance - must have deposit already paid.
+            if ( ! $booking->deposit_paid ) {
+                wc_add_notice( __( 'Deposit must be paid before remaining balance.', 'peanut-booker' ), 'error' );
+                return;
+            }
+            if ( $booking->fully_paid ) {
+                wc_add_notice( __( 'This booking has already been fully paid.', 'peanut-booker' ), 'error' );
+                return;
+            }
+        } else {
+            // Paying deposit - must not already be paid.
+            if ( $booking->deposit_paid ) {
+                wc_add_notice( __( 'Deposit for this booking has already been paid.', 'peanut-booker' ), 'error' );
+                return;
+            }
         }
 
         // Clear cart and add booking product.
@@ -369,6 +435,35 @@ class Peanut_Booker_WooCommerce {
     }
 
     /**
+     * Get checkout URL for a booking deposit.
+     *
+     * @param int $booking_id Booking ID.
+     * @return string Checkout URL with nonce.
+     */
+    public static function get_checkout_url( $booking_id ) {
+        $booking = Peanut_Booker_Booking::get( $booking_id );
+
+        if ( ! $booking ) {
+            return '';
+        }
+
+        // Don't generate URL if deposit already paid.
+        if ( $booking->deposit_paid ) {
+            return '';
+        }
+
+        // SECURITY: Include nonce for CSRF protection.
+        return add_query_arg(
+            array(
+                'pb_booking' => $booking_id,
+                'action'     => 'checkout',
+                '_wpnonce'   => wp_create_nonce( 'pb_checkout_booking' ),
+            ),
+            wc_get_checkout_url()
+        );
+    }
+
+    /**
      * Process remaining balance payment.
      *
      * @param int $booking_id Booking ID.
@@ -381,11 +476,13 @@ class Peanut_Booker_WooCommerce {
             return '';
         }
 
+        // SECURITY: Include nonce for CSRF protection.
         return add_query_arg(
             array(
-                'pb_booking'  => $booking_id,
-                'action'      => 'checkout',
-                'payment'     => 'remaining',
+                'pb_booking' => $booking_id,
+                'action'     => 'checkout',
+                'payment'    => 'remaining',
+                '_wpnonce'   => wp_create_nonce( 'pb_checkout_booking' ),
             ),
             wc_get_checkout_url()
         );

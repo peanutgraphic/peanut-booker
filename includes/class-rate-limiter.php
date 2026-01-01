@@ -191,6 +191,29 @@ class Peanut_Booker_Rate_Limiter {
     }
 
     /**
+     * Enforce rate limiting for AJAX requests
+     *
+     * @param string $action The action type
+     * @param string|null $identifier Optional identifier
+     * @return bool True if allowed, sends JSON error and dies if limited
+     */
+    public static function enforce_ajax(string $action, ?string $identifier = null): bool {
+        $result = self::check($action, $identifier);
+
+        if (!$result['allowed']) {
+            wp_send_json_error([
+                'code' => 'rate_limit_exceeded',
+                'message' => __('Too many requests. Please try again later.', 'peanut-booker'),
+                'retry_after' => $result['reset'] - time(),
+            ], 429);
+            // wp_send_json_error calls die(), but just in case:
+            die();
+        }
+
+        return true;
+    }
+
+    /**
      * Log rate limit events
      *
      * @param string $action The action that was rate limited

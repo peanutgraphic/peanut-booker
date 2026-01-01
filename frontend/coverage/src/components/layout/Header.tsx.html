@@ -23,30 +23,30 @@
         <div class='clearfix'>
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Statements</span>
-                <span class='fraction'>0/5</span>
+                <span class='fraction'>5/5</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Branches</span>
-                <span class='fraction'>0/9</span>
+                <span class='fraction'>9/9</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Functions</span>
-                <span class='fraction'>0/4</span>
+                <span class='fraction'>4/4</span>
             </div>
         
             
             <div class='fl pad1y space-right2'>
-                <span class="strong">0% </span>
+                <span class="strong">100% </span>
                 <span class="quiet">Lines</span>
-                <span class='fraction'>0/5</span>
+                <span class='fraction'>5/5</span>
             </div>
         
             
@@ -61,7 +61,7 @@
             </div>
         </template>
     </div>
-    <div class='status-line low'></div>
+    <div class='status-line high'></div>
     <pre><table class="coverage">
 <tr><td class="line-count quiet"><a name='L1'></a><a href='#L1'>1</a>
 <a name='L2'></a><a href='#L2'>2</a>
@@ -164,11 +164,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">28x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">28x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -196,7 +194,9 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-yes">3x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -210,7 +210,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -218,7 +218,7 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-no">&nbsp;</span>
+<span class="cline-any cline-yes">6x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -247,10 +247,10 @@ interface HeaderProps {
   helpContent?: HelpContent;
 }
 &nbsp;
-export default function <span class="fstat-no" title="function not covered" >Header({</span> title, description, helpContent }: HeaderProps) {
-  const [showHelp, setShowHelp<span class="cstat-no" title="statement not covered" >] = useState(false);</span>
+export default function Header({ title, description, helpContent }: HeaderProps) {
+  const [showHelp, setShowHelp] = useState(false);
 &nbsp;
-<span class="cstat-no" title="statement not covered" >  return (</span>
+  return (
     &lt;&gt;
       {/* Top bar */}
       &lt;header className="h-14 bg-white border-b border-slate-200 flex items-center justify-end px-6"&gt;
@@ -280,7 +280,7 @@ export default function <span class="fstat-no" title="function not covered" >Hea
           &lt;/div&gt;
           {helpContent &amp;&amp; (
             &lt;button
-              onClick={<span class="fstat-no" title="function not covered" >() =&gt; <span class="cstat-no" title="statement not covered" >s</span>etShowHelp(true)}</span>
+              onClick={() =&gt; setShowHelp(true)}
               className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 transition-colors"
             &gt;
               &lt;HelpCircle className="w-4 h-4" /&gt;
@@ -294,15 +294,15 @@ export default function <span class="fstat-no" title="function not covered" >Hea
       {helpContent &amp;&amp; (
         &lt;Modal
           isOpen={showHelp}
-          onClose={<span class="fstat-no" title="function not covered" >() =&gt; <span class="cstat-no" title="statement not covered" >s</span>etShowHelp(false)}</span>
+          onClose={() =&gt; setShowHelp(false)}
           title={helpContent.title}
         &gt;
           &lt;div className="space-y-4"&gt;
             &lt;p className="text-slate-600"&gt;{helpContent.content}&lt;/p&gt;
             {helpContent.bullets &amp;&amp; helpContent.bullets.length &gt; 0 &amp;&amp; (
               &lt;ul className="space-y-2"&gt;
-                {helpContent.bullets.map(<span class="fstat-no" title="function not covered" >(b</span>ullet, i) =&gt; (
-<span class="cstat-no" title="statement not covered" >                  &lt;li key={i} className="flex items-start gap-2 text-slate-600"&gt;</span>
+                {helpContent.bullets.map((bullet, i) =&gt; (
+                  &lt;li key={i} className="flex items-start gap-2 text-slate-600"&gt;
                     &lt;span className="w-1.5 h-1.5 bg-primary-500 rounded-full mt-2 flex-shrink-0" /&gt;
                     {bullet}
                   &lt;/li&gt;
@@ -322,7 +322,7 @@ export default function <span class="fstat-no" title="function not covered" >Hea
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-01-01T23:13:48.044Z
+                at 2026-01-01T23:19:52.607Z
             </div>
         <script src="../../../prettify.js"></script>
         <script>

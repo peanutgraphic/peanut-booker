@@ -426,4 +426,199 @@ class Peanut_Booker_Roles {
             }
         }
     }
+
+    // =========================================================================
+    // CAPABILITY-BASED ACCESS CHECKS
+    // These methods replace raw ID comparisons with proper capability checks.
+    // =========================================================================
+
+    /**
+     * Check if user can view a specific booking.
+     *
+     * Access is granted if:
+     * - User has pb_manage_bookings capability (admin)
+     * - User is the customer for this booking
+     * - User is the performer for this booking
+     *
+     * @param object $booking Booking object with customer_id and performer_id.
+     * @param int    $user_id Optional user ID (defaults to current user).
+     * @return bool True if user can view the booking.
+     */
+    public static function can_view_booking( $booking, $user_id = null ) {
+        if ( null === $user_id ) {
+            $user_id = get_current_user_id();
+        }
+
+        if ( ! $user_id || ! $booking ) {
+            return false;
+        }
+
+        // Admin capability check.
+        if ( user_can( $user_id, 'pb_manage_bookings' ) ) {
+            return true;
+        }
+
+        // Customer check.
+        if ( isset( $booking->customer_id ) && (int) $booking->customer_id === $user_id ) {
+            return true;
+        }
+
+        // Performer check.
+        if ( isset( $booking->performer_id ) ) {
+            $performer = Peanut_Booker_Performer::get_by_user_id( $user_id );
+            if ( $performer && (int) $booking->performer_id === (int) $performer->id ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if user can manage (edit/cancel) a specific booking.
+     *
+     * @param object $booking Booking object.
+     * @param int    $user_id Optional user ID.
+     * @return bool True if user can manage the booking.
+     */
+    public static function can_manage_booking( $booking, $user_id = null ) {
+        // For now, same as can_view. Could be more restrictive later.
+        return self::can_view_booking( $booking, $user_id );
+    }
+
+    /**
+     * Check if user is the customer for a booking.
+     *
+     * @param object $booking Booking object.
+     * @param int    $user_id Optional user ID.
+     * @return bool True if user is the customer.
+     */
+    public static function is_booking_customer( $booking, $user_id = null ) {
+        if ( null === $user_id ) {
+            $user_id = get_current_user_id();
+        }
+
+        return $booking && isset( $booking->customer_id ) && (int) $booking->customer_id === $user_id;
+    }
+
+    /**
+     * Check if user is the performer for a booking.
+     *
+     * @param object $booking Booking object.
+     * @param int    $user_id Optional user ID.
+     * @return bool True if user is the performer.
+     */
+    public static function is_booking_performer( $booking, $user_id = null ) {
+        if ( null === $user_id ) {
+            $user_id = get_current_user_id();
+        }
+
+        if ( ! $booking || ! isset( $booking->performer_id ) ) {
+            return false;
+        }
+
+        $performer = Peanut_Booker_Performer::get_by_user_id( $user_id );
+        return $performer && (int) $booking->performer_id === (int) $performer->id;
+    }
+
+    /**
+     * Check if user can leave a review for a booking.
+     *
+     * @param object $booking Booking object.
+     * @param int    $user_id Optional user ID.
+     * @return bool True if user can review.
+     */
+    public static function can_review_booking( $booking, $user_id = null ) {
+        if ( null === $user_id ) {
+            $user_id = get_current_user_id();
+        }
+
+        // Must be either customer or performer.
+        if ( ! self::is_booking_customer( $booking, $user_id ) && ! self::is_booking_performer( $booking, $user_id ) ) {
+            return false;
+        }
+
+        // Must have pb_leave_reviews or pb_respond_reviews capability.
+        return user_can( $user_id, 'pb_leave_reviews' ) || user_can( $user_id, 'pb_respond_reviews' );
+    }
+
+    /**
+     * Check if user can view a performer's profile.
+     *
+     * @param object $performer Performer object.
+     * @param int    $user_id   Optional user ID.
+     * @return bool True if user can view.
+     */
+    public static function can_view_performer( $performer, $user_id = null ) {
+        if ( null === $user_id ) {
+            $user_id = get_current_user_id();
+        }
+
+        // Public profiles are viewable by anyone.
+        if ( $performer && ! empty( $performer->is_public ) ) {
+            return true;
+        }
+
+        // Admin can view all.
+        if ( user_can( $user_id, 'pb_manage_performers' ) ) {
+            return true;
+        }
+
+        // Own profile.
+        if ( $performer && isset( $performer->user_id ) && (int) $performer->user_id === $user_id ) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if user can edit a performer's profile.
+     *
+     * @param object $performer Performer object.
+     * @param int    $user_id   Optional user ID.
+     * @return bool True if user can edit.
+     */
+    public static function can_edit_performer( $performer, $user_id = null ) {
+        if ( null === $user_id ) {
+            $user_id = get_current_user_id();
+        }
+
+        // Admin can edit all.
+        if ( user_can( $user_id, 'pb_manage_performers' ) ) {
+            return true;
+        }
+
+        // Must be own profile with edit capability.
+        if ( $performer && isset( $performer->user_id ) && (int) $performer->user_id === $user_id ) {
+            return user_can( $user_id, 'pb_edit_own_profile' );
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if user can manage market events.
+     *
+     * @param object $event   Market event object.
+     * @param int    $user_id Optional user ID.
+     * @return bool True if user can manage.
+     */
+    public static function can_manage_market_event( $event, $user_id = null ) {
+        if ( null === $user_id ) {
+            $user_id = get_current_user_id();
+        }
+
+        // Admin can manage all.
+        if ( user_can( $user_id, 'pb_manage_market' ) ) {
+            return true;
+        }
+
+        // Event owner.
+        if ( $event && isset( $event->customer_id ) && (int) $event->customer_id === $user_id ) {
+            return true;
+        }
+
+        return false;
+    }
 }

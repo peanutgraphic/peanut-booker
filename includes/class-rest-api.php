@@ -239,14 +239,8 @@ class Peanut_Booker_REST_API {
             return new WP_Error( 'rest_not_found', __( 'Booking not found.', 'peanut-booker' ), array( 'status' => 404 ) );
         }
 
-        $user_id   = get_current_user_id();
-        $performer = Peanut_Booker_Performer::get_by_user_id( $user_id );
-
-        $is_customer  = (int) $booking->customer_id === $user_id;
-        $is_performer = $performer && (int) $performer->id === (int) $booking->performer_id;
-        $is_admin     = current_user_can( 'pb_manage_bookings' );
-
-        if ( ! $is_customer && ! $is_performer && ! $is_admin ) {
+        // Use capability-based access check instead of raw ID comparison.
+        if ( ! Peanut_Booker_Roles::can_view_booking( $booking ) ) {
             return new WP_Error( 'rest_forbidden', __( 'Not authorized.', 'peanut-booker' ), array( 'status' => 403 ) );
         }
 

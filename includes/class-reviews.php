@@ -563,12 +563,16 @@ class Peanut_Booker_Reviews {
 
         $user_id = get_current_user_id();
 
-        // Determine reviewee.
-        $performer = Peanut_Booker_Performer::get_by_user_id( $user_id );
-        if ( $performer && (int) $performer->id === (int) $booking->performer_id ) {
+        // Use capability-based check for review authorization.
+        if ( ! Peanut_Booker_Roles::can_review_booking( $booking, $user_id ) ) {
+            wp_send_json_error( array( 'message' => __( 'Not authorized to review this booking.', 'peanut-booker' ) ) );
+        }
+
+        // Determine reviewee based on user's role in booking.
+        if ( Peanut_Booker_Roles::is_booking_performer( $booking, $user_id ) ) {
             // Performer reviewing customer.
             $reviewee_id = $booking->customer_id;
-        } elseif ( (int) $booking->customer_id === $user_id ) {
+        } elseif ( Peanut_Booker_Roles::is_booking_customer( $booking, $user_id ) ) {
             // Customer reviewing performer.
             $performer_record = Peanut_Booker_Performer::get( $booking->performer_id );
             $reviewee_id      = $performer_record ? $performer_record->user_id : 0;

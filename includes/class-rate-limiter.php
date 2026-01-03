@@ -97,6 +97,17 @@ class Peanut_Booker_Rate_Limiter {
     }
 
     /**
+     * Check rate limit and respond if exceeded (alias for enforce)
+     *
+     * @param string $action The action type
+     * @param string|null $identifier Optional identifier
+     * @return \WP_REST_Response|null Null if allowed, WP_REST_Response if limited
+     */
+    public static function check_or_respond(string $action, ?string $identifier = null): ?\WP_REST_Response {
+        return self::enforce($action, $identifier);
+    }
+
+    /**
      * Enforce rate limiting - returns WP_REST_Response if limited
      *
      * @param string $action The action type

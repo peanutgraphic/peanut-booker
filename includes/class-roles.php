@@ -130,7 +130,7 @@ class Peanut_Booker_Roles {
      * @param int $user_id Optional user ID.
      * @return bool
      */
-    public static function is_performer( $user_id = null ) {
+    public static function is_performer( ?int $user_id = null ) {
         if ( null === $user_id ) {
             $user_id = get_current_user_id();
         }
@@ -149,7 +149,7 @@ class Peanut_Booker_Roles {
      * @param int $user_id Optional user ID.
      * @return bool
      */
-    public static function is_customer( $user_id = null ) {
+    public static function is_customer( ?int $user_id = null ) {
         if ( null === $user_id ) {
             $user_id = get_current_user_id();
         }
@@ -168,7 +168,7 @@ class Peanut_Booker_Roles {
      * @param int $user_id Optional user ID.
      * @return string Tier (free/pro/featured).
      */
-    public static function get_performer_tier( $user_id = null ) {
+    public static function get_performer_tier( ?int $user_id = null ) {
         if ( null === $user_id ) {
             $user_id = get_current_user_id();
         }
@@ -188,7 +188,7 @@ class Peanut_Booker_Roles {
      * @param int $user_id Optional user ID.
      * @return bool
      */
-    public static function is_pro_performer( $user_id = null ) {
+    public static function is_pro_performer( ?int $user_id = null ) {
         $tier = self::get_performer_tier( $user_id );
         return in_array( $tier, array( 'pro', 'featured' ), true );
     }
@@ -199,7 +199,7 @@ class Peanut_Booker_Roles {
      * @param int $user_id Optional user ID.
      * @return bool
      */
-    public static function is_featured_performer( $user_id = null ) {
+    public static function is_featured_performer( ?int $user_id = null ) {
         return 'featured' === self::get_performer_tier( $user_id );
     }
 
@@ -290,7 +290,7 @@ class Peanut_Booker_Roles {
      * @param int $user_id Optional user ID.
      * @return bool
      */
-    public static function can_bid_on_events( $user_id = null ) {
+    public static function can_bid_on_events( ?int $user_id = null ) {
         if ( null === $user_id ) {
             $user_id = get_current_user_id();
         }
@@ -304,7 +304,7 @@ class Peanut_Booker_Roles {
      * @param int $user_id Optional user ID.
      * @return bool
      */
-    public static function can_unlimited_photos( $user_id = null ) {
+    public static function can_unlimited_photos( ?int $user_id = null ) {
         if ( null === $user_id ) {
             $user_id = get_current_user_id();
         }
@@ -322,7 +322,7 @@ class Peanut_Booker_Roles {
      * @param int $user_id Optional user ID.
      * @return int Number of photos allowed (-1 for unlimited).
      */
-    public static function get_photo_limit( $user_id = null ) {
+    public static function get_photo_limit( ?int $user_id = null ) {
         $tier = self::get_performer_tier( $user_id );
 
         switch ( $tier ) {
@@ -345,7 +345,7 @@ class Peanut_Booker_Roles {
      * @param int $user_id Optional user ID.
      * @return int Number of videos allowed (-1 for unlimited).
      */
-    public static function get_video_limit( $user_id = null ) {
+    public static function get_video_limit( ?int $user_id = null ) {
         $tier = self::get_performer_tier( $user_id );
 
         switch ( $tier ) {
@@ -364,7 +364,7 @@ class Peanut_Booker_Roles {
      * @param int $user_id Optional user ID.
      * @return bool
      */
-    public static function has_unlimited_photos( $user_id = null ) {
+    public static function has_unlimited_photos( ?int $user_id = null ) {
         return self::get_photo_limit( $user_id ) === -1;
     }
 
@@ -374,7 +374,7 @@ class Peanut_Booker_Roles {
      * @param int $user_id Optional user ID.
      * @return bool
      */
-    public static function has_unlimited_videos( $user_id = null ) {
+    public static function has_unlimited_videos( ?int $user_id = null ) {
         return self::get_video_limit( $user_id ) === -1;
     }
 
@@ -407,7 +407,7 @@ class Peanut_Booker_Roles {
      * @param int $user_id Optional user ID.
      * @return float Commission percentage.
      */
-    public static function get_user_commission_rate( $user_id = null ) {
+    public static function get_user_commission_rate( ?int $user_id = null ) {
         return self::get_commission_rate( self::get_performer_tier( $user_id ) );
     }
 
@@ -444,7 +444,7 @@ class Peanut_Booker_Roles {
      * @param int    $user_id Optional user ID (defaults to current user).
      * @return bool True if user can view the booking.
      */
-    public static function can_view_booking( $booking, $user_id = null ) {
+    public static function can_view_booking( $booking, ?int $user_id = null ) {
         if ( null === $user_id ) {
             $user_id = get_current_user_id();
         }
@@ -481,7 +481,7 @@ class Peanut_Booker_Roles {
      * @param int    $user_id Optional user ID.
      * @return bool True if user can manage the booking.
      */
-    public static function can_manage_booking( $booking, $user_id = null ) {
+    public static function can_manage_booking( $booking, ?int $user_id = null ) {
         // For now, same as can_view. Could be more restrictive later.
         return self::can_view_booking( $booking, $user_id );
     }
@@ -493,7 +493,7 @@ class Peanut_Booker_Roles {
      * @param int    $user_id Optional user ID.
      * @return bool True if user is the customer.
      */
-    public static function is_booking_customer( $booking, $user_id = null ) {
+    public static function is_booking_customer( $booking, ?int $user_id = null ) {
         if ( null === $user_id ) {
             $user_id = get_current_user_id();
         }
@@ -508,7 +508,7 @@ class Peanut_Booker_Roles {
      * @param int    $user_id Optional user ID.
      * @return bool True if user is the performer.
      */
-    public static function is_booking_performer( $booking, $user_id = null ) {
+    public static function is_booking_performer( $booking, ?int $user_id = null ) {
         if ( null === $user_id ) {
             $user_id = get_current_user_id();
         }
@@ -528,7 +528,7 @@ class Peanut_Booker_Roles {
      * @param int    $user_id Optional user ID.
      * @return bool True if user can review.
      */
-    public static function can_review_booking( $booking, $user_id = null ) {
+    public static function can_review_booking( $booking, ?int $user_id = null ) {
         if ( null === $user_id ) {
             $user_id = get_current_user_id();
         }
@@ -549,7 +549,7 @@ class Peanut_Booker_Roles {
      * @param int    $user_id   Optional user ID.
      * @return bool True if user can view.
      */
-    public static function can_view_performer( $performer, $user_id = null ) {
+    public static function can_view_performer( $performer, ?int $user_id = null ) {
         if ( null === $user_id ) {
             $user_id = get_current_user_id();
         }
@@ -579,7 +579,7 @@ class Peanut_Booker_Roles {
      * @param int    $user_id   Optional user ID.
      * @return bool True if user can edit.
      */
-    public static function can_edit_performer( $performer, $user_id = null ) {
+    public static function can_edit_performer( $performer, ?int $user_id = null ) {
         if ( null === $user_id ) {
             $user_id = get_current_user_id();
         }
@@ -604,7 +604,7 @@ class Peanut_Booker_Roles {
      * @param int    $user_id Optional user ID.
      * @return bool True if user can manage.
      */
-    public static function can_manage_market_event( $event, $user_id = null ) {
+    public static function can_manage_market_event( $event, ?int $user_id = null ) {
         if ( null === $user_id ) {
             $user_id = get_current_user_id();
         }

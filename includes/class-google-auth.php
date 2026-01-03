@@ -451,7 +451,7 @@ class Peanut_Booker_Google_Auth {
      * @param int $user_id User ID.
      * @return bool
      */
-    public static function is_google_linked( $user_id = null ) {
+    public static function is_google_linked( ?int $user_id = null ) {
         if ( null === $user_id ) {
             $user_id = get_current_user_id();
         }
@@ -466,7 +466,7 @@ class Peanut_Booker_Google_Auth {
      *
      * @param int $user_id User ID.
      */
-    public static function unlink( $user_id = null ) {
+    public static function unlink( ?int $user_id = null ) {
         if ( null === $user_id ) {
             $user_id = get_current_user_id();
         }

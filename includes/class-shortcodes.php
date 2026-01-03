@@ -690,7 +690,7 @@ class Peanut_Booker_Shortcodes {
 
             <?php if ( isset( $_GET['pb_auth_error'] ) ) : ?>
                 <div class="pb-message pb-message-error">
-                    <?php echo esc_html( urldecode( $_GET['pb_auth_error'] ) ); ?>
+                    <?php echo esc_html( urldecode( sanitize_text_field( wp_unslash( $_GET['pb_auth_error'] ) ) ) ); ?>
                 </div>
             <?php endif; ?>
 

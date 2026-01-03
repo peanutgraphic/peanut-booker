@@ -37,6 +37,7 @@ import {
   Calendar,
   Link2,
   Crown,
+  Search,
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -386,7 +387,7 @@ export default function Performers() {
               placeholder="Search performers..."
               value={performerFilters.search}
               onChange={(e) => setPerformerFilter('search', e.target.value)}
-              className="pl-10"
+              leftIcon={<Search className="w-4 h-4" />}
             />
           </div>
           <Select

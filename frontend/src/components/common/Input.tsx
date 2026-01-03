@@ -1,14 +1,15 @@
-import { forwardRef, type InputHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { forwardRef, type InputHTMLAttributes, type TextareaHTMLAttributes, type ReactNode } from 'react';
 import { clsx } from 'clsx';
 
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
   hint?: string;
+  leftIcon?: ReactNode;
 }
 
 const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ className, label, error, hint, id, ...props }, ref) => {
+  ({ className, label, error, hint, leftIcon, id, ...props }, ref) => {
     const inputId = id || props.name;
 
     return (
@@ -18,19 +19,27 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             {label}
           </label>
         )}
-        <input
-          ref={ref}
-          id={inputId}
-          className={clsx(
-            'w-full px-3 py-2 border rounded-lg text-sm transition-colors',
-            'focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent',
-            error
-              ? 'border-red-300 focus:ring-red-500'
-              : 'border-slate-300 hover:border-slate-400',
-            className
+        <div className="relative">
+          {leftIcon && (
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+              {leftIcon}
+            </div>
           )}
-          {...props}
-        />
+          <input
+            ref={ref}
+            id={inputId}
+            className={clsx(
+              'w-full py-2 border rounded-lg text-sm transition-colors',
+              leftIcon ? 'pl-10 pr-3' : 'px-3',
+              'focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent',
+              error
+                ? 'border-red-300 focus:ring-red-500'
+                : 'border-slate-300 hover:border-slate-400',
+              className
+            )}
+            {...props}
+          />
+        </div>
         {hint && !error && (
           <p className="text-xs text-slate-500">{hint}</p>
         )}

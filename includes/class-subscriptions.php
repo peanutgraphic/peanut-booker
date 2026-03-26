@@ -1,4 +1,8 @@
 <?php
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 /**
  * Subscriptions and Pro membership functionality.
  *
@@ -603,6 +607,11 @@ class Peanut_Booker_Subscriptions {
      * AJAX: Get subscription status.
      */
     public function ajax_get_status() {
+        // Verify nonce for security
+        if ( ! isset( $_REQUEST['_wpnonce'] ) || ! wp_verify_nonce( $_REQUEST['_wpnonce'], 'pb_get_subscription_status' ) ) {
+            wp_send_json_error( array( 'message' => __( 'Security check failed', 'peanut-booker' ) ) );
+        }
+
         if ( ! is_user_logged_in() ) {
             wp_send_json_error( array( 'message' => __( 'Not logged in.', 'peanut-booker' ) ) );
         }

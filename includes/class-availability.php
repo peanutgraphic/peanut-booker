@@ -1,4 +1,8 @@
 <?php
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 /**
  * Availability calendar functionality.
  *
@@ -574,6 +578,11 @@ class Peanut_Booker_Availability {
      * AJAX: Get availability.
      */
     public function ajax_get_availability() {
+        // Verify nonce for public endpoint
+        if ( ! isset( $_GET['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( $_GET['nonce'] ), 'pb_availability_public' ) ) {
+            wp_send_json_error( array( 'message' => __( 'Security check failed.', 'peanut-booker' ) ) );
+        }
+
         $performer_id = absint( $_GET['performer_id'] ?? 0 );
         $month        = sanitize_text_field( $_GET['month'] ?? gmdate( 'Y-m' ) );
 

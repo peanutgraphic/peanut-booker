@@ -1,4 +1,8 @@
 <?php
+if (!defined('ABSPATH')) {
+    exit;
+}
+
 /**
  * Google OAuth authentication handler.
  *
@@ -108,6 +112,11 @@ class Peanut_Booker_Google_Auth {
      * AJAX handler to redirect to Google login.
      */
     public function ajax_google_login_redirect() {
+        // Verify nonce for public endpoint
+        if ( ! isset( $_POST['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( $_POST['nonce'] ), 'pb_google_login' ) ) {
+            wp_send_json_error( array( 'message' => __( 'Security check failed.', 'peanut-booker' ) ) );
+        }
+
         $action   = isset( $_POST['auth_action'] ) ? sanitize_text_field( $_POST['auth_action'] ) : 'login';
         $redirect = isset( $_POST['redirect'] ) ? esc_url_raw( $_POST['redirect'] ) : '';
 

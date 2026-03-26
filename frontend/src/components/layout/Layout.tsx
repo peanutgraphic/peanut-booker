@@ -36,7 +36,7 @@ export default function Layout({ children, title, description, helpContent }: La
         description={description}
         helpContent={helpContent}
       />
-      <main className="p-6 overflow-x-hidden">
+      <main id="main-content" tabIndex={-1} className="p-6 overflow-x-hidden">
         {/* Sample Data Preview Banner */}
         {showDemoBanner && (
           <div className="mb-6 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">

@@ -1,4 +1,6 @@
 <?php
+
+if ( ! defined( 'ABSPATH' ) ) { exit; }
 /**
  * Plugin Name: Peanut Booker
  * Plugin URI: https://peanutgraphic.com/peanut-booker

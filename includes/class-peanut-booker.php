@@ -137,6 +137,9 @@ class Peanut_Booker {
         // Messaging system.
         require_once PEANUT_BOOKER_PATH . 'includes/class-messages.php';
 
+        // ML Booking Predictor integration.
+        require_once PEANUT_BOOKER_PATH . 'includes/class-ml-booking-predictor.php';
+
         // Admin class.
         require_once PEANUT_BOOKER_PATH . 'admin/class-admin.php';
 
@@ -241,6 +244,9 @@ class Peanut_Booker {
         // Initialize Admin REST API for React SPA.
         new Peanut_Booker_REST_API_Admin();
 
+        // Initialize ML Booking Predictor.
+        $this->init_ml_predictor();
+
         // Initialize Peanut Suite integration.
         new Peanut_Booker_Peanut_Suite();
 
@@ -261,6 +267,133 @@ class Peanut_Booker {
 
         // Initialize audit logging.
         new Peanut_Booker_Audit_Log();
+    }
+
+    /**
+     * Initialize ML Booking Predictor and set up cron jobs.
+     */
+    private function init_ml_predictor() {
+        global $peanut_booker_ml_predictor;
+
+        // Create global instance for easy access.
+        $peanut_booker_ml_predictor = new Peanut_Booker_ML_Predictor();
+
+        // Schedule weekly model training cron job.
+        if ( ! wp_next_scheduled( 'peanut_booker_ml_train_models' ) ) {
+            wp_schedule_event( time(), 'weekly', 'peanut_booker_ml_train_models' );
+        }
+
+        // Hook the actual training function to the cron.
+        add_action( 'peanut_booker_ml_train_models', array( $this, 'cron_train_ml_models' ) );
+
+        // Hook to booking creation to optionally run ML prediction.
+        add_action( 'peanut_booker_booking_created', array( $this, 'on_booking_created' ), 10, 2 );
+    }
+
+    /**
+     * Cron job handler for training ML models.
+     *
+     * @access public
+     */
+    public function cron_train_ml_models() {
+        global $peanut_booker_ml_predictor;
+
+        if ( ! $peanut_booker_ml_predictor ) {
+            $peanut_booker_ml_predictor = new Peanut_Booker_ML_Predictor();
+        }
+
+        $result = $peanut_booker_ml_predictor->train_model();
+
+        if ( is_wp_error( $result ) ) {
+            error_log(
+                '[Peanut Booker ML] Model training failed: ' . $result->get_error_message()
+            );
+        } else {
+            error_log(
+                '[Peanut Booker ML] Models trained successfully. ' .
+                'Completion samples: ' . $result['completion_samples'] .
+                ', Dispute samples: ' . $result['dispute_samples']
+            );
+        }
+    }
+
+    /**
+     * Hook called when a booking is created to run ML predictions.
+     *
+     * @param int   $booking_id Booking ID.
+     * @param array $booking_data Booking data.
+     * @access public
+     */
+    public function on_booking_created( $booking_id, $booking_data ) {
+        global $peanut_booker_ml_predictor;
+
+        if ( ! $peanut_booker_ml_predictor ) {
+            $peanut_booker_ml_predictor = new Peanut_Booker_ML_Predictor();
+        }
+
+        // Check if ML prediction is enabled in settings.
+        $ml_enabled = get_option( 'peanut_booker_ml_enabled', false );
+        if ( ! $ml_enabled ) {
+            return;
+        }
+
+        // Get performer and customer stats for prediction.
+        $performer = Peanut_Booker_Performer::get( $booking_data['performer_id'] );
+        if ( ! $performer ) {
+            return;
+        }
+
+        $performer_stats = Peanut_Booker_Database::get_row(
+            'bookings',
+            array(
+                'performer_id' => $booking_data['performer_id'],
+            ),
+            array( 'COUNT(*)' => 'total_bookings' )
+        );
+
+        $customer_stats = Peanut_Booker_Database::get_row(
+            'bookings',
+            array(
+                'customer_id' => $booking_data['customer_id'],
+            ),
+            array( 'COUNT(*)' => 'total_bookings' )
+        );
+
+        // Prepare prediction data.
+        $prediction_data = array(
+            'performer_id'              => $booking_data['performer_id'],
+            'customer_id'               => $booking_data['customer_id'],
+            'booking_amount'            => $booking_data['total_amount'],
+            'category'                  => 'general',
+            'has_escrow'                => ! empty( $booking_data['escrow_status'] ),
+            'performer_rating'          => (float) $performer->average_rating,
+            'performer_completed_count' => intval( $performer_stats['total_bookings'] ?? 0 ),
+            'customer_booking_count'    => intval( $customer_stats['total_bookings'] ?? 0 ),
+        );
+
+        // Run prediction.
+        $result = $peanut_booker_ml_predictor->predict_completion( $prediction_data );
+
+        if ( ! is_wp_error( $result ) ) {
+            // Store prediction as booking meta.
+            update_post_meta(
+                $booking_id,
+                '_peanut_booker_completion_probability',
+                $result['completion_probability']
+            );
+
+            update_post_meta(
+                $booking_id,
+                '_peanut_booker_risk_level',
+                $result['risk_level']
+            );
+
+            update_post_meta(
+                $booking_id,
+                '_peanut_booker_risk_factors',
+                $result['risk_factors']
+            );
+        }
     }
 
     /**

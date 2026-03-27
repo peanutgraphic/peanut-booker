@@ -169,3 +169,20 @@ add_action( 'before_woocommerce_init', function() {
         \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility( 'custom_order_tables', __FILE__, true );
     }
 } );
+
+/**
+ * Global ML predictor instance.
+ *
+ * @var Peanut_Booker_ML_Predictor|null
+ */
+$peanut_booker_ml_predictor = null;
+
+/**
+ * Get the ML Booking Predictor instance.
+ *
+ * @return Peanut_Booker_ML_Predictor|null
+ */
+function peanut_booker_ml_predictor() {
+    global $peanut_booker_ml_predictor;
+    return $peanut_booker_ml_predictor;
+}

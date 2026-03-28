@@ -29,7 +29,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
             ref={ref}
             id={inputId}
             className={clsx(
-              'w-full py-2 border rounded-lg text-sm transition-colors',
+              'w-full py-2 border rounded-lg text-sm transition-colors text-slate-900 dark:text-slate-100',
               leftIcon ? 'pl-10 pr-3' : 'px-3',
               'focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent',
               error
@@ -74,7 +74,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
           ref={ref}
           id={inputId}
           className={clsx(
-            'w-full px-3 py-2 border rounded-lg text-sm transition-colors resize-y',
+            'w-full px-3 py-2 border rounded-lg text-sm transition-colors resize-y text-slate-900 dark:text-slate-100',
             'focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent',
             error
               ? 'border-red-300 focus:ring-red-500'

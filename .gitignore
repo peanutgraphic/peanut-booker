@@ -1,2 +1,10 @@
 node_modules/
 .DS_Store
+
+# --- added by gitignore-sync on 2026-04-13 ---
+.claude/settings.local.json
+.claude/worktrees/
+*.log
+vendor/
+.phpunit.result.cache
+.phpunit.cache/

@@ -21,5 +21,14 @@
     }
   },
   "include": ["src"],
+  "exclude": [
+    "src/test/**",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/**/*.spec.ts",
+    "src/**/*.spec.tsx",
+    "src/**/*.a11y.ts",
+    "src/**/*.a11y.tsx"
+  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

@@ -47,7 +47,7 @@ Object.defineProperty(window, 'peanutBooker', {
 });
 
 // Mock fetch
-global.fetch = vi.fn();
+globalThis.fetch = vi.fn() as typeof fetch;
 
 // Reset mocks before each test
 beforeEach(() => {

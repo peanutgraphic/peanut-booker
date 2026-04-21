@@ -30,16 +30,16 @@ export default function Layout({ children, title, description, helpContent }: La
   const showDemoBanner = demoStatus?.enabled && !bannerDismissed;
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-[100dvh] bg-slate-50">
       <Header
         title={title}
         description={description}
         helpContent={helpContent}
       />
-      <main id="main-content" tabIndex={-1} className="p-6 overflow-x-hidden">
+      <main id="main-content" tabIndex={-1} className="p-4 sm:p-6 overflow-x-hidden">
         {/* Sample Data Preview Banner */}
         {showDemoBanner && (
-          <div className="mb-6 px-4 py-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
+          <div className="mb-6 flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2 text-amber-800">
               <Database className="w-4 h-4" />
               <span className="font-medium">Sample Data Preview</span>
@@ -47,6 +47,7 @@ export default function Layout({ children, title, description, helpContent }: La
             <button
               onClick={() => setBannerDismissed(true)}
               className="p-1 text-amber-600 hover:text-amber-800 hover:bg-amber-100 rounded transition-colors"
+              aria-label="Dismiss sample data preview banner"
             >
               <X className="w-4 h-4" />
             </button>

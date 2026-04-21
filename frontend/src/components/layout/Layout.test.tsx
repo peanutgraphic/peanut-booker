@@ -134,7 +134,7 @@ describe('Layout', () => {
       );
 
       const wrapper = container.firstChild;
-      expect(wrapper).toHaveClass('min-h-screen', 'bg-slate-50');
+      expect(wrapper).toHaveClass('min-h-[100dvh]', 'bg-slate-50');
     });
 
     it('applies correct main styles', () => {
@@ -145,7 +145,7 @@ describe('Layout', () => {
       );
 
       const main = container.querySelector('main');
-      expect(main).toHaveClass('p-6', 'overflow-x-hidden');
+      expect(main).toHaveClass('p-4', 'sm:p-6', 'overflow-x-hidden');
     });
   });
 });

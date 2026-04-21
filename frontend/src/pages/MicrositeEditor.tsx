@@ -597,7 +597,7 @@ export default function MicrositeEditor() {
 
   if (previewLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-slate-50 flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
       </div>
     );
@@ -605,7 +605,7 @@ export default function MicrositeEditor() {
 
   if (!previewData) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="min-h-[100dvh] bg-slate-50 flex items-center justify-center">
         <Card className="p-8 text-center">
           <p className="text-slate-500">Performer not found</p>
           <Button onClick={() => navigate('/performers')} className="mt-4">
@@ -620,7 +620,7 @@ export default function MicrositeEditor() {
   const showPreview = ['profile', 'media', 'pricing', 'location', 'bio', 'design', 'layout', 'social', 'gigs', 'analytics'].includes(activeTab);
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-[100dvh] bg-slate-50">
       {/* Header */}
       <div className="bg-white border-b border-slate-200 px-6 py-4">
         <div className="flex items-center justify-between">
@@ -730,9 +730,9 @@ export default function MicrositeEditor() {
       </div>
 
       {/* Main Content - Three Panel Layout */}
-      <div className="flex h-[calc(100vh-73px)]">
+      <div className="flex min-h-[calc(100dvh-73px)] flex-col xl:h-[calc(100dvh-73px)] xl:flex-row">
         {/* Left Sidebar - Vertical Tabs */}
-        <div className="w-[200px] flex-shrink-0 bg-slate-50 border-r border-slate-200 flex flex-col overflow-y-auto">
+        <div className="w-full flex-shrink-0 bg-slate-50 border-b border-slate-200 flex flex-col overflow-y-auto xl:w-[200px] xl:border-b-0 xl:border-r">
           {/* Dashboard Section */}
           <div className="p-3 border-b border-slate-200">
             <nav className="space-y-1" aria-label="Dashboard tabs">
@@ -1017,10 +1017,10 @@ export default function MicrositeEditor() {
             </div>
 
             {/* Preview Frame */}
-            <div className="flex-1 overflow-auto p-6 flex justify-center">
+            <div className="flex-1 overflow-auto p-4 sm:p-6 flex justify-center">
               <div
                 className={clsx(
-                  'bg-white rounded-lg shadow-lg w-full transition-all duration-300 overflow-y-auto max-h-[calc(100vh-180px)]',
+                  'bg-white rounded-lg shadow-lg w-full transition-all duration-300 overflow-y-auto max-h-[calc(100dvh-180px)]',
                   getDeviceWidth()
                 )}
               >

@@ -137,18 +137,16 @@ export default function Modal({
   return (
     <Fragment>
       {/* Backdrop */}
-      <div
+      <button
+        type="button"
         className="fixed inset-0 bg-black/50 z-[999998] transition-opacity"
         onClick={onClose}
-        aria-hidden="true"
+        aria-label="Close modal"
       />
 
       {/* Modal */}
-      <div
-        className="fixed inset-0 z-[999999] overflow-y-auto"
-        role="presentation"
-      >
-        <div className="flex min-h-full items-center justify-center p-4">
+      <div className="fixed inset-0 z-[999999] overflow-y-auto">
+        <div className="flex min-h-[100dvh] items-end justify-center p-3 sm:items-center sm:p-4">
           <div
             ref={modalRef}
             role="dialog"
@@ -156,7 +154,7 @@ export default function Modal({
             aria-labelledby={title ? titleId : undefined}
             aria-describedby={description ? descriptionId : undefined}
             className={clsx(
-              'relative bg-white rounded-xl shadow-xl w-full transform transition-all animate-scale-in',
+              'relative w-full max-h-[calc(100dvh-1.5rem)] overflow-hidden rounded-t-2xl bg-white shadow-xl transform transition-all animate-scale-in sm:max-h-[calc(100dvh-2rem)] sm:rounded-xl',
               sizes[size],
               className
             )}
@@ -198,7 +196,7 @@ export default function Modal({
             )}
 
             {/* Content */}
-            <div className="p-5">{children}</div>
+            <div className="max-h-[calc(100dvh-9rem)] overflow-y-auto p-5 sm:max-h-[calc(100dvh-10rem)]">{children}</div>
           </div>
         </div>
       </div>
